@@ -5,7 +5,7 @@ import editorStyles from '@eigenpal/docx-editor-react/styles.css';
 
 let stylesInjected = false;
 
-function ensureEditorStyles() {
+export function ensureEditorStyles() {
 	if (stylesInjected) {
 		return;
 	}
