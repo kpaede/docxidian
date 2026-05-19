@@ -1,4 +1,4 @@
-import { Notice, TFile } from 'obsidian';
+import { Notice, TFile, setIcon } from 'obsidian';
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef } from 'react';
 import { DocxEditor, DocxEditorRef } from '@eigenpal/docx-editor-react';
 import editorStyles from '@eigenpal/docx-editor-react/styles.css';
@@ -15,6 +15,38 @@ export function ensureEditorStyles() {
 	document.adoptedStyleSheets = [...document.adoptedStyleSheets, styleSheet];
 	stylesInjected = true;
 }
+
+const SaveButton = ({ onClick }: { onClick: () => void }) => {
+	const ref = useRef<HTMLButtonElement>(null);
+	useEffect(() => {
+		if (ref.current) {
+			ref.current.innerHTML = '';
+			setIcon(ref.current, 'save');
+		}
+	}, []);
+
+	return (
+		<button
+			ref={ref}
+			type="button"
+			className="clickable-icon docxidian-logo-save-button"
+			onClick={onClick}
+			aria-label="Save"
+			title="Save"
+			style={{ 
+				background: 'transparent',
+				border: 'none',
+				boxShadow: 'none',
+				padding: '4px 8px',
+				cursor: 'pointer',
+				display: 'flex',
+				alignItems: 'center',
+				justifyContent: 'center',
+				color: 'inherit'
+			}}
+		/>
+	);
+};
 
 export interface DocxReactViewProps {
 	file: TFile | null;
@@ -119,16 +151,8 @@ export const DocxReactView = forwardRef<DocxReactViewHandle, DocxReactViewProps>
 			author={authorName}
 			documentName={file.basename}
 			documentNameEditable={false}
-			renderTitleBarRight={() => (
-				<button
-					type="button"
-					className="docxidian-title-save-button"
-					onClick={() => {
-						void saveDocument();
-					}}
-				>
-					Speichern
-				</button>
+			renderLogo={() => (
+				<SaveButton onClick={() => void saveDocument()} />
 			)}
 			onChange={() => {
 				if (dirtyTrackingEnabledRef.current) {
