@@ -36,6 +36,7 @@ export const DocxReactView = forwardRef<DocxReactViewHandle, DocxReactViewProps>
 ) {
 	const editorRef = useRef<DocxEditorRef>(null);
 	const dirtyTrackingEnabledRef = useRef(false);
+	const isSavingRef = useRef(false);
 
 	useEffect(() => {
 		ensureEditorStyles();
@@ -58,6 +59,11 @@ export const DocxReactView = forwardRef<DocxReactViewHandle, DocxReactViewProps>
 			return false;
 		}
 
+		if (isSavingRef.current) {
+			return false;
+		}
+		isSavingRef.current = true;
+
 		try {
 			await onSave(output);
 			new Notice(`Saved ${file.name}`);
@@ -66,6 +72,10 @@ export const DocxReactView = forwardRef<DocxReactViewHandle, DocxReactViewProps>
 			const message = saveError instanceof Error ? saveError.message : 'Unknown save error';
 			new Notice(`Could not save ${file.name}: ${message}`);
 			return false;
+		} finally {
+			setTimeout(() => {
+				isSavingRef.current = false;
+			}, 300);
 		}
 	}, [file, onSave]);
 
