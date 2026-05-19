@@ -1,8 +1,106 @@
-/*
+.workspace-leaf-content[data-type='docxidian-docx-view'] .view-content {
+	overflow: hidden;
+	padding: 0;
+}
 
-This CSS file will be included with your plugin, and
-available in the app when your plugin is enabled.
+.docxidian-host {
+	background: #f8fafc;
+	display: flex;
+	flex-direction: column;
+	height: 100%;
+	min-height: 0;
+	overflow: hidden;
+	width: 100%;
+}
 
-If your plugin does not need CSS, delete this file.
+.docxidian-host > .ep-root {
+	flex: 1;
+	height: 100%;
+	min-height: 0;
+	width: 100%;
+}
 
-*/
+.docxidian-host .ep-root,
+.docxidian-host .ep-root * {
+	box-sizing: border-box;
+}
+
+.docxidian-host .ep-root button,
+.docxidian-host .ep-root input,
+.docxidian-host .ep-root select,
+.docxidian-host .ep-root textarea {
+	font: inherit;
+}
+
+.docxidian-host .ep-root button {
+	appearance: none;
+	box-shadow: none !important;
+}
+
+.docxidian-host .ep-root button:hover,
+.docxidian-host .ep-root button:focus,
+.docxidian-host .ep-root button:active {
+	box-shadow: none !important;
+}
+
+.docxidian-host .ep-root [data-testid='editor-toolbar'] button.h-7.w-7,
+.docxidian-host .ep-root .docx-list-button {
+	background-color: transparent !important;
+	border-color: transparent !important;
+	border-style: solid !important;
+	border-width: 0 !important;
+}
+
+.docxidian-host .ep-root [data-testid='editor-toolbar'] button.h-7.w-7:hover,
+.docxidian-host .ep-root [data-testid='editor-toolbar'] button.h-7.w-7:focus,
+.docxidian-host .ep-root .docx-list-button:hover,
+.docxidian-host .ep-root .docx-list-button:focus {
+	background-color: rgba(241, 245, 249, 0.8) !important;
+}
+
+.docxidian-host .ep-root [data-testid='editor-toolbar'] button.h-7.w-7[aria-pressed='true'],
+.docxidian-host .ep-root .docx-list-button-active {
+	background-color: var(--doc-primary-light) !important;
+}
+
+.docxidian-host .ep-root .docx-text-context-menu {
+	transform: translate(
+		calc(-1 * var(--docxidian-fixed-left-offset, 0px)),
+		calc(-1 * var(--docxidian-fixed-top-offset, 0px))
+	);
+}
+
+.docxidian-host .ep-root [style*='position: fixed'] {
+	--docxidian-fixed-correction: translate(
+		calc(-1 * var(--docxidian-fixed-left-offset, 0px)),
+		calc(-1 * var(--docxidian-fixed-top-offset, 0px))
+	);
+	transform: var(--docxidian-fixed-correction);
+}
+
+.docxidian-host .ep-root [style*='position: fixed'][style*='transform'] {
+	transform: var(--docxidian-fixed-correction) var(--docxidian-existing-transform, none);
+}
+
+.docxidian-host .ep-root [data-testid='editor-toolbar'] {
+	isolation: isolate;
+	position: relative;
+	z-index: 100010;
+}
+
+.docxidian-host .ep-root [role='menubar'] [style*='position: fixed'] {
+	z-index: 100020 !important;
+}
+
+.docxidian-host .ep-root .docx-outline-nav {
+	z-index: 1 !important;
+}
+
+.docxidian-host .ep-root [role='menubar'] > div:last-child {
+	display: none !important;
+}
+
+body > .ep-root,
+.ep-root [data-radix-popper-content-wrapper] {
+	z-index: 100000 !important;
+}

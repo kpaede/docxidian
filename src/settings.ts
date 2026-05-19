@@ -1,35 +1,35 @@
-import {App, PluginSettingTab, Setting} from "obsidian";
-import MyPlugin from "./main";
+import { App, PluginSettingTab, Setting } from 'obsidian';
+import DocxidianPlugin from './main';
 
-export interface MyPluginSettings {
-	mySetting: string;
+export interface DocxidianSettings {
+	authorName: string;
 }
 
-export const DEFAULT_SETTINGS: MyPluginSettings = {
-	mySetting: 'default'
-}
+export const DEFAULT_SETTINGS: DocxidianSettings = {
+	authorName: 'Obsidian',
+};
 
-export class SampleSettingTab extends PluginSettingTab {
-	plugin: MyPlugin;
+export class DocxidianSettingTab extends PluginSettingTab {
+	plugin: DocxidianPlugin;
 
-	constructor(app: App, plugin: MyPlugin) {
+	constructor(app: App, plugin: DocxidianPlugin) {
 		super(app, plugin);
 		this.plugin = plugin;
 	}
 
 	display(): void {
-		const {containerEl} = this;
+		const { containerEl } = this;
 
 		containerEl.empty();
 
 		new Setting(containerEl)
-			.setName('Settings #1')
-			.setDesc('It\'s a secret')
+			.setName('Author name')
+			.setDesc('Used for comments and tracked changes.')
 			.addText(text => text
-				.setPlaceholder('Enter your secret')
-				.setValue(this.plugin.settings.mySetting)
+				.setPlaceholder('Obsidian')
+				.setValue(this.plugin.settings.authorName)
 				.onChange(async (value) => {
-					this.plugin.settings.mySetting = value;
+					this.plugin.settings.authorName = value.trim() || DEFAULT_SETTINGS.authorName;
 					await this.plugin.saveSettings();
 				}));
 	}
