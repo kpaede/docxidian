@@ -22,6 +22,7 @@ export interface DocxReactViewProps {
 	error: string | null;
 	isLoading: boolean;
 	authorName: string;
+	onDirtyChange: (isDirty: boolean) => void;
 	onSave: (buffer: ArrayBuffer) => Promise<void>;
 }
 
@@ -30,14 +31,27 @@ export interface DocxReactViewHandle {
 }
 
 export const DocxReactView = forwardRef<DocxReactViewHandle, DocxReactViewProps>(function DocxReactView(
-	{ file, buffer, error, isLoading, authorName, onSave },
+	{ file, buffer, error, isLoading, authorName, onDirtyChange, onSave },
 	ref,
 ) {
 	const editorRef = useRef<DocxEditorRef>(null);
+	const dirtyTrackingEnabledRef = useRef(false);
 
 	useEffect(() => {
 		ensureEditorStyles();
 	}, []);
+
+	useEffect(() => {
+		dirtyTrackingEnabledRef.current = false;
+		const timeout = window.setTimeout(() => {
+			dirtyTrackingEnabledRef.current = true;
+		}, 500);
+
+		return () => {
+			window.clearTimeout(timeout);
+			dirtyTrackingEnabledRef.current = false;
+		};
+	}, [file, buffer]);
 
 	const persistDocument = useCallback(async (output: ArrayBuffer) => {
 		if (!file) {
@@ -61,7 +75,7 @@ export const DocxReactView = forwardRef<DocxReactViewHandle, DocxReactViewProps>
 			return false;
 		}
 
-		const output = await editorRef.current?.save();
+		const output = await editorRef.current?.save({ selective: false });
 		if (!output) {
 			new Notice(`Could not save ${file.name}: the editor did not return a document.`);
 			return false;
@@ -94,6 +108,23 @@ export const DocxReactView = forwardRef<DocxReactViewHandle, DocxReactViewProps>
 			mode="editing"
 			author={authorName}
 			documentName={file.basename}
+			documentNameEditable={false}
+			renderTitleBarRight={() => (
+				<button
+					type="button"
+					className="docxidian-title-save-button"
+					onClick={() => {
+						void saveDocument();
+					}}
+				>
+					Speichern
+				</button>
+			)}
+			onChange={() => {
+				if (dirtyTrackingEnabledRef.current) {
+					onDirtyChange(true);
+				}
+			}}
 			onSave={(output) => {
 				void persistDocument(output);
 			}}

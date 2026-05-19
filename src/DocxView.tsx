@@ -1,9 +1,77 @@
-import { FileView, Notice, TFile, WorkspaceLeaf } from 'obsidian';
+import { App, FileView, Modal, Notice, TFile, WorkspaceLeaf } from 'obsidian';
 import { createRef } from 'react';
 import { Root, createRoot } from 'react-dom/client';
 import { DocxReactView, DocxReactViewHandle } from './DocxReactView';
 
 export const VIEW_TYPE_DOCX = 'docxidian-docx-view';
+
+type UnsavedDocxChoice = 'save' | 'discard';
+
+class UnsavedDocxModal extends Modal {
+	private resolveChoice: (choice: UnsavedDocxChoice) => void;
+	private resolved = false;
+
+	constructor(
+		app: App,
+		private fileName: string,
+		resolveChoice: (choice: UnsavedDocxChoice) => void,
+	) {
+		super(app);
+		this.resolveChoice = resolveChoice;
+	}
+
+	onOpen() {
+		const { contentEl } = this;
+		contentEl.empty();
+		contentEl.createEl('h2', { text: 'Änderungen speichern?' });
+		contentEl.createEl('p', { text: `${this.fileName} hat ungespeicherte Änderungen.` });
+
+		const buttonRow = contentEl.createDiv({ cls: 'docxidian-unsaved-actions' });
+		const discardButton = buttonRow.createEl('button', { text: 'Verwerfen' });
+		const saveButton = buttonRow.createEl('button', { text: 'Speichern' });
+		saveButton.addClass('mod-cta');
+
+		discardButton.addEventListener('click', () => this.choose('discard'));
+		saveButton.addEventListener('click', () => this.choose('save'));
+	}
+
+	onClose() {
+		this.contentEl.empty();
+		if (!this.resolved) {
+			this.choose('discard');
+		}
+	}
+
+	private choose(choice: UnsavedDocxChoice) {
+		if (this.resolved) {
+			return;
+		}
+
+		this.resolved = true;
+		this.resolveChoice(choice);
+		this.close();
+	}
+}
+
+function shouldHandleEditorSaveClick(target: EventTarget | null) {
+	if (!(target instanceof Element)) {
+		return false;
+	}
+
+	let candidate: Element | null = target;
+	while (candidate && candidate !== document.body) {
+		if (candidate instanceof HTMLElement) {
+			const text = candidate.textContent?.replace(/\s+/g, ' ').trim().toLowerCase() ?? '';
+			if (/^save(?:\b|⌘|ctrl|\s)/.test(text) || /^speichern(?:\b|⌘|ctrl|\s)/.test(text)) {
+				return true;
+			}
+		}
+
+		candidate = candidate.parentElement;
+	}
+
+	return false;
+}
 
 export class DocxView extends FileView {
 	private root: Root | null = null;
@@ -12,6 +80,7 @@ export class DocxView extends FileView {
 	private buffer: ArrayBuffer | null = null;
 	private error: string | null = null;
 	private isLoading = false;
+	private isDirty = false;
 	private hostResizeObserver: ResizeObserver | null = null;
 	private titleObserver: MutationObserver | null = null;
 
@@ -41,11 +110,14 @@ export class DocxView extends FileView {
 		this.prepareViewHost();
 		this.registerHostMetrics();
 		this.removeNativeButtonTitles();
+		this.registerEditorSaveInterceptor();
+		this.registerSaveShortcut();
 		this.root = createRoot(this.hostEl);
 		this.render();
 	}
 
 	async onClose() {
+		await this.promptToSaveIfDirty();
 		this.root?.unmount();
 		this.root = null;
 		this.hostResizeObserver?.disconnect();
@@ -56,12 +128,15 @@ export class DocxView extends FileView {
 		this.reactViewRef = createRef<DocxReactViewHandle>();
 		this.buffer = null;
 		this.error = null;
+		this.isDirty = false;
 	}
 
 	async onLoadFile(file: TFile) {
+		await this.promptToSaveIfDirty();
 		this.isLoading = true;
 		this.error = null;
 		this.buffer = null;
+		this.isDirty = false;
 		this.render();
 
 		try {
@@ -77,8 +152,10 @@ export class DocxView extends FileView {
 	}
 
 	async onUnloadFile(_file: TFile) {
+		await this.promptToSaveIfDirty();
 		this.buffer = null;
 		this.error = null;
+		this.isDirty = false;
 		this.render();
 	}
 
@@ -98,7 +175,12 @@ export class DocxView extends FileView {
 			return false;
 		}
 
-		return await this.reactViewRef.current?.save() ?? false;
+		const saved = await this.reactViewRef.current?.save() ?? false;
+		if (saved) {
+			this.isDirty = false;
+		}
+
+		return saved;
 	}
 
 	private async saveFile(buffer: ArrayBuffer) {
@@ -109,7 +191,22 @@ export class DocxView extends FileView {
 
 		await this.app.vault.modifyBinary(file, buffer);
 		this.buffer = buffer.slice(0);
+		this.isDirty = false;
 		this.render();
+	}
+
+	private async promptToSaveIfDirty() {
+		if (!this.isDirty || !this.file) {
+			return;
+		}
+
+		const choice = await new Promise<UnsavedDocxChoice>((resolve) => {
+			new UnsavedDocxModal(this.app, this.file?.name ?? 'Document', resolve).open();
+		});
+
+		if (choice === 'save') {
+			await this.saveCurrentDocument();
+		}
 	}
 
 	private prepareViewHost() {
@@ -199,6 +296,41 @@ export class DocxView extends FileView {
 		});
 	}
 
+	private registerEditorSaveInterceptor() {
+		this.registerDomEvent(document, 'click', (evt) => {
+			if (
+				!this.hostEl
+				|| this.app.workspace.getActiveViewOfType(DocxView) !== this
+				|| (evt.target instanceof Element && !!evt.target.closest('.modal'))
+				|| !shouldHandleEditorSaveClick(evt.target)
+			) {
+				return;
+			}
+
+			evt.preventDefault();
+			evt.stopImmediatePropagation();
+			void this.saveCurrentDocument();
+		}, true);
+	}
+
+	private registerSaveShortcut() {
+		this.registerDomEvent(document, 'keydown', (evt) => {
+			if (
+				!this.hostEl
+				|| evt.key.toLowerCase() !== 's'
+				|| (!evt.metaKey && !evt.ctrlKey)
+				|| !(document.activeElement instanceof Node)
+				|| !this.hostEl.contains(document.activeElement)
+			) {
+				return;
+			}
+
+			evt.preventDefault();
+			evt.stopImmediatePropagation();
+			void this.saveCurrentDocument();
+		}, true);
+	}
+
 	private render() {
 		this.root?.render(
 			<DocxReactView
@@ -208,6 +340,9 @@ export class DocxView extends FileView {
 				error={this.error}
 				isLoading={this.isLoading}
 				authorName={this.getAuthorName()}
+				onDirtyChange={(isDirty) => {
+					this.isDirty = isDirty;
+				}}
 				onSave={(buffer) => this.saveFile(buffer)}
 			/>,
 		);

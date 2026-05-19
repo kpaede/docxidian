@@ -5,5 +5,5 @@
 	"minAppVersion": "0.15.0",
 	"description": "Open, edit, and save DOCX documents directly inside Obsidian.",
 	"author": "Kornelius Paede",
-	"isDesktopOnly": false
+	"isDesktopOnly": true
 }

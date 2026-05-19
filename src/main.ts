@@ -1,6 +1,6 @@
 import { Notice, Plugin } from 'obsidian';
 import { DEFAULT_SETTINGS, DocxidianSettings, DocxidianSettingTab } from './settings';
-import { processDocxEmbeds } from './DocxEmbed';
+import { processDocxEmbeds, registerDocxFileEmbed } from './DocxEmbed';
 import { DocxView, VIEW_TYPE_DOCX } from './DocxView';
 
 const DOCX_EXTENSIONS = ['docx'];
@@ -16,6 +16,7 @@ export default class DocxidianPlugin extends Plugin {
 			(leaf) => new DocxView(leaf, () => this.settings.authorName),
 		);
 		this.registerExtensions(DOCX_EXTENSIONS, VIEW_TYPE_DOCX);
+		registerDocxFileEmbed(this);
 		this.registerMarkdownPostProcessor((el, ctx) => {
 			processDocxEmbeds(this.app, el, ctx);
 		}, 1000);

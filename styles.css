@@ -96,34 +96,53 @@
 	z-index: 1 !important;
 }
 
-.docxidian-host .ep-root [role='menubar'] > div:last-child {
+.docxidian-host .ep-root [role='menubar'] [style*='position: fixed'] > div:first-child {
 	display: none !important;
 }
 
 .docxidian-embed {
-	background: #f8fafc;
-	border: 1px solid var(--background-modifier-border);
-	border-radius: 8px;
+	background: transparent;
 	display: block;
-	height: min(70vh, 720px);
 	margin: 1em 0;
-	min-height: 420px;
-	overflow: hidden;
+	max-width: 100%;
+	min-height: 0;
+	overflow: visible;
 	width: 100%;
 }
 
 .docxidian-embed-host {
-	display: flex;
-	height: 100%;
-	min-height: 0;
+	display: block;
+	min-height: 1px;
 	width: 100%;
 }
 
-.docxidian-embed-host > .ep-root {
-	flex: 1;
-	height: 100%;
-	min-height: 0;
-	width: 100%;
+.docxidian-embed-viewport {
+	max-height: min(70vh, var(--docxidian-embed-page-height, 720px));
+	max-width: 100%;
+	overflow: auto;
+	width: fit-content;
+}
+
+.docxidian-embed-pages {
+	display: flex;
+	flex-direction: column;
+	gap: 16px;
+	width: fit-content;
+}
+
+.docxidian-embed-pages .layout-page {
+	flex: 0 0 auto;
+}
+
+.docxidian-embed-source {
+	height: 1px;
+	left: -100000px;
+	overflow: hidden;
+	pointer-events: none;
+	position: fixed;
+	top: 0;
+	visibility: hidden;
+	width: 1200px;
 }
 
 .docxidian-embed-loading,
@@ -145,4 +164,31 @@
 body > .ep-root,
 .ep-root [data-radix-popper-content-wrapper] {
 	z-index: 100000 !important;
+}
+
+.docxidian-unsaved-actions {
+	display: flex;
+	gap: 8px;
+	justify-content: flex-end;
+	margin-top: 20px;
+}
+
+.docxidian-title-save-button {
+	align-items: center;
+	background: var(--interactive-accent) !important;
+	border: 0;
+	border-radius: 6px;
+	color: var(--text-on-accent) !important;
+	cursor: pointer;
+	display: inline-flex;
+	font-size: var(--font-ui-small);
+	font-weight: 600;
+	height: 28px;
+	padding: 0 12px;
+	white-space: nowrap;
+}
+
+.docxidian-title-save-button:hover,
+.docxidian-title-save-button:focus {
+	background: var(--interactive-accent-hover) !important;
 }
