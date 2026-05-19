@@ -1,0 +1,12 @@
+{
+  "author": "<%= authorGitHubName %>",
+  "authorUrl": "https://github.com/<%= authorGitHubName %>/",
+  "description": "<%= pluginDescription %>",
+<% if (fundingUrl) { %>
+  "fundingUrl": "<%= fundingUrl %>",
+<%_ } %>
+  "id": "<%= pluginId %>",
+  "isDesktopOnly": <%= isDesktopOnly %>,
+  "name": "<%= pluginName %>",
+  "version": "0.0.0"
+}

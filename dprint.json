@@ -1,0 +1,31 @@
+{
+  "typescript": {
+    "bracePosition": "sameLine",
+    "constructSignature.spaceAfterNewKeyword": true,
+    "constructorType.spaceAfterNewKeyword": true,
+    "exportDeclaration.forceMultiLine": "whenMultiple",
+    "exportDeclaration.sortNamedExports": "maintain",
+    "functionExpression.spaceAfterFunctionKeyword": true,
+    "importDeclaration.forceMultiLine": "whenMultiple",
+    "importDeclaration.sortNamedImports": "maintain",
+    "lineWidth": 160,
+    "module.sortExportDeclarations": "maintain",
+    "module.sortImportDeclarations": "maintain",
+    "quoteStyle": "alwaysSingle",
+    "trailingCommas": "never"
+  },
+  "json": {},
+  "markdown": {},
+  "excludes": [
+    "dist",
+    "generators",
+    "**/node_modules",
+    "**/*-lock.json",
+    "**/*.md"
+  ],
+  "plugins": [
+    "https://plugins.dprint.dev/typescript-0.93.3.wasm",
+    "https://plugins.dprint.dev/json-0.19.4.wasm",
+    "https://plugins.dprint.dev/markdown-0.17.8.wasm"
+  ]
+}

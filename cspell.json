@@ -1,0 +1,43 @@
+{
+  "version": "0.2",
+  "ignorePaths": [
+    "generators/app/index.js",
+    "npm-shrinkwrap.json"
+  ],
+  "dictionaryDefinitions": [],
+  "dictionaries": [],
+  "words": [
+    "appname",
+    "autolinks",
+    "collab",
+    "dirents",
+    "dprint",
+    "hotreload",
+    "johndoe",
+    "Jsdocs",
+    "jsons",
+    "lezer",
+    "mnaoumov",
+    "Naumov",
+    "noext",
+    "outdir",
+    "outfile",
+    "postversion",
+    "premajor",
+    "preminor",
+    "prepatch",
+    "preversion",
+    "setext",
+    "shumadrid",
+    "sublist",
+    "tsbuildinfo",
+    "TSES",
+    "tsconfigs",
+    "Tsdocs",
+    "whatwg",
+    "yosay"
+  ],
+  "ignoreWords": [],
+  "import": [],
+  "enabled": true
+}
