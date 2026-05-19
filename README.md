@@ -1,7 +1,7 @@
 # docxidian
 
 docxidian opens `.docx` files directly inside Obsidian and saves edits back to the same vault file.
-You can also embed (read-onlyx) docx-Files via ![[filename.docx]]
+You can also embed (read-only) docx-Files via ![[filename.docx]]
 
 The editor integration is based on [DOCX EDITOR](https://github.com/eigenpal/docx-editor), adapted from its Vite/React usage pattern to Obsidian's plugin runtime:
 
@@ -17,7 +17,7 @@ Enable the plugin in **Settings -> Community plugins**, then open a `.docx` file
 
 Use the editor toolbar's save action (upper left) or the command **Save current docx** to write changes back to the open file.
 
-You can also embed (read-onlyx) docx-Files via ![[filename.docx]]
+You can also embed (read-only) docx-Files via ![[filename.docx]]
 
 ## Disclaimer
 
