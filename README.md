@@ -1,4 +1,4 @@
-# Docxidian
+# docxidian
 
 docxidian opens `.docx` files directly inside Obsidian and saves edits back to the same vault file.
 You can also embed (read-onlyx) docx-Files via ![[filename.docx]]
