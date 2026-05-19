@@ -3,12 +3,7 @@
 docxidian opens `.docx` files directly inside Obsidian and saves edits back to the same vault file.
 You can also embed (read-onlyx) docx-Files via ![[filename.docx]]
 
-The editor integration is based on `@eigenpal/docx-editor-react`, adapted from its Vite/React usage pattern to Obsidian's plugin runtime:
-
-- Obsidian loads the DOCX file with `vault.readBinary`.
-- React renders `DocxEditor` only after the document buffer is available.
-- Editor CSS is bundled as text and injected at runtime.
-- The editor saves through its ref API and writes the resulting `ArrayBuffer` with `vault.modifyBinary`.
+The editor integration is based on [DOCX EDITOR](https://github.com/eigenpal/docx-editor), adapted from its Vite/React usage pattern to Obsidian's plugin runtime:
 
 ![](screenshot.png)
 
