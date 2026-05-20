@@ -122,6 +122,7 @@ export class DocxView extends FileView {
 		this.trackEditorHoverState();
 		this.registerEditorSaveInterceptor();
 		this.registerSaveShortcut();
+		this.registerEditorDropdownScrollGuard();
 		this.root = createRoot(this.hostEl);
 		this.render();
 	}
@@ -389,6 +390,22 @@ export class DocxView extends FileView {
 			evt.stopImmediatePropagation();
 			void this.saveCurrentDocument();
 		}, true);
+	}
+
+	private registerEditorDropdownScrollGuard() {
+		const keepEditorListboxOpen = (evt: Event) => {
+			if (!this.hostEl || this.app.workspace.getActiveViewOfType(DocxView) !== this || !(evt.target instanceof Element)) {
+				return;
+			}
+
+			const listbox = evt.target.closest('[role="listbox"]');
+			if (listbox && this.hostEl.contains(listbox)) {
+				evt.stopImmediatePropagation();
+				evt.stopPropagation();
+			}
+		};
+
+		this.registerDomEvent(window, 'scroll', keepEditorListboxOpen, true);
 	}
 
 	private render() {

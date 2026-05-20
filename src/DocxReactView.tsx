@@ -76,6 +76,8 @@ export const DocxReactView = forwardRef<DocxReactViewHandle, DocxReactViewProps>
 	const isSavingRef = useRef(false);
 	const autosaveTimeoutRef = useRef<number | null>(null);
 	const renameTimeoutRef = useRef<number | null>(null);
+	const pendingSaveOptionsRef = useRef<{ silent?: boolean } | undefined>(undefined);
+	const pendingSavePromiseRef = useRef<Promise<boolean> | null>(null);
 	const [documentName, setDocumentName] = useState(file?.name ?? '');
 	const pluginSidebarItems = useMemo<NonNullable<ComponentProps<typeof DocxEditor>['pluginSidebarItems']>>(() => {
 		if (!reserveReviewSidebar) {
@@ -166,10 +168,20 @@ export const DocxReactView = forwardRef<DocxReactViewHandle, DocxReactViewProps>
 			return false;
 		}
 
+		pendingSaveOptionsRef.current = options;
+		pendingSavePromiseRef.current = null;
 		const output = await editorRef.current?.save({ selective: false });
+		const pendingSavePromise = pendingSavePromiseRef.current;
+		pendingSaveOptionsRef.current = undefined;
+		pendingSavePromiseRef.current = null;
+
 		if (!output) {
 			new Notice(`Could not save ${file.name}: the editor did not return a document.`);
 			return false;
+		}
+
+		if (pendingSavePromise) {
+			return pendingSavePromise;
 		}
 
 		return persistDocument(output, options);
@@ -250,7 +262,9 @@ export const DocxReactView = forwardRef<DocxReactViewHandle, DocxReactViewProps>
 				}
 			}}
 			onSave={(output) => {
-				void persistDocument(output);
+				const savePromise = persistDocument(output, pendingSaveOptionsRef.current);
+				pendingSavePromiseRef.current = savePromise;
+				void savePromise;
 			}}
 			onError={(docxError) => {
 				new Notice(`Could not render ${file.name}: ${docxError.message}`);
