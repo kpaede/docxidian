@@ -3,7 +3,7 @@
 docxidian opens `.docx` files directly inside Obsidian and saves edits back to the same vault file.
 You can also embed (read-only) docx-Files via ![[filename.docx]]
 
-The editor integration is based on [DOCX EDITOR](https://github.com/eigenpal/docx-editor), adapted from its Vite/React usage pattern to Obsidian's plugin runtime:
+The plugin is based on [DOCX EDITOR](https://github.com/eigenpal/docx-editor), and it's Vite/React example.
 
 ![](screenshot.png)
 
