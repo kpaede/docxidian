@@ -1,6 +1,6 @@
 import { Notice, TFile, setIcon } from 'obsidian';
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState, type ComponentProps } from 'react';
-import { DocxEditor, DocxEditorRef } from '@eigenpal/docx-editor-react';
+import { DocxEditor, type DocxEditorRef, type EditorMode } from '@eigenpal/docx-editor-react';
 import type { Translations } from '@eigenpal/docx-editor-i18n';
 import editorStyles from '@eigenpal/docx-editor-react/styles.css';
 
@@ -26,6 +26,22 @@ interface DocxDocumentWithSectionProperties {
 
 const DEFAULT_PAGE_HEIGHT_TWIPS = 15840;
 const DEFAULT_MARGIN_TWIPS = 1440;
+
+function getEditorModeFromButton(button: HTMLButtonElement): EditorMode | null {
+	const label = button.textContent?.replace(/\s+/g, ' ').trim().toLowerCase() ?? '';
+
+	if (label.startsWith('bearbeiten') || label.startsWith('edit')) {
+		return 'editing';
+	}
+	if (label.startsWith('vorschlagen') || label.startsWith('suggest')) {
+		return 'suggesting';
+	}
+	if (label.startsWith('anzeigen') || label.startsWith('view')) {
+		return 'viewing';
+	}
+
+	return null;
+}
 
 export function ensureEditorStyles() {
 	if (stylesInjected) {
@@ -103,6 +119,8 @@ export const DocxReactView = forwardRef<DocxReactViewHandle, DocxReactViewProps>
 	const pendingSaveOptionsRef = useRef<{ silent?: boolean } | undefined>(undefined);
 	const pendingSavePromiseRef = useRef<Promise<boolean> | null>(null);
 	const [documentName, setDocumentName] = useState(file?.name ?? '');
+	const [editorMode, setEditorMode] = useState<EditorMode>('editing');
+	const filePath = file?.path ?? null;
 	const pluginSidebarItems = useMemo<NonNullable<ComponentProps<typeof DocxEditor>['pluginSidebarItems']>>(() => {
 		if (!reserveReviewSidebar) {
 			return [];
@@ -135,7 +153,91 @@ export const DocxReactView = forwardRef<DocxReactViewHandle, DocxReactViewProps>
 
 	useEffect(() => {
 		setDocumentName(file?.name ?? '');
-	}, [file]);
+		setEditorMode('editing');
+	}, [filePath]);
+
+	const setMode = useCallback((mode: EditorMode) => {
+		setEditorMode(mode);
+	}, []);
+
+	const normalizeEditorModeDropdown = useCallback(() => {
+		const editorRoot = document.querySelector<HTMLElement>(`.${editorClassNameRef.current}`);
+		if (!editorRoot) {
+			return;
+		}
+
+		const modeButtons = Array.from(editorRoot.querySelectorAll<HTMLButtonElement>('button'))
+			.filter((button) => getEditorModeFromButton(button) !== null);
+		const menuItemButtons = modeButtons.filter((button) => button.querySelector(':scope span span'));
+
+		menuItemButtons.forEach((button) => {
+			button.style.alignItems = 'center';
+			button.style.boxShadow = 'none';
+			button.style.gap = '10px';
+			button.style.justifyContent = 'flex-start';
+			button.style.lineHeight = 'normal';
+			button.style.minHeight = '48px';
+			button.style.padding = '8px 12px';
+
+			const icon = button.querySelector<HTMLElement>(':scope > svg:first-child');
+			if (icon) {
+				icon.style.display = 'inline-flex';
+				icon.style.flex = '0 0 20px';
+				icon.style.height = '20px';
+				icon.style.width = '20px';
+			}
+
+			const labelColumn = button.querySelector<HTMLElement>(':scope > span');
+			if (labelColumn) {
+				labelColumn.style.flex = '1 1 auto';
+				labelColumn.style.minWidth = '0';
+			}
+		});
+
+		const menu = menuItemButtons[0]?.parentElement;
+		if (menu instanceof HTMLElement && menuItemButtons.length === 3) {
+			menu.style.padding = '4px 0';
+			menu.style.overflow = 'hidden';
+		}
+	}, []);
+
+	useEffect(() => {
+		const editorRoot = document.querySelector<HTMLElement>(`.${editorClassNameRef.current}`);
+		if (!editorRoot) {
+			return;
+		}
+
+		normalizeEditorModeDropdown();
+		const observer = new MutationObserver(normalizeEditorModeDropdown);
+		observer.observe(editorRoot, {
+			childList: true,
+			subtree: true,
+		});
+
+		return () => observer.disconnect();
+	}, [buffer, filePath, isLoading, normalizeEditorModeDropdown]);
+
+	useEffect(() => {
+		const handleModePointerDown = (evt: PointerEvent) => {
+			const editorRoot = document.querySelector<HTMLElement>(`.${editorClassNameRef.current}`);
+			if (!editorRoot || !(evt.target instanceof Element) || !editorRoot.contains(evt.target)) {
+				return;
+			}
+
+			const button = evt.target.closest('button');
+			if (!(button instanceof HTMLButtonElement) || !editorRoot.contains(button)) {
+				return;
+			}
+
+			const mode = getEditorModeFromButton(button);
+			if (mode) {
+				window.setTimeout(() => setMode(mode), 0);
+			}
+		};
+
+		document.addEventListener('pointerdown', handleModePointerDown, true);
+		return () => document.removeEventListener('pointerdown', handleModePointerDown, true);
+	}, [setMode]);
 
 	const clearAutosaveTimeout = useCallback(() => {
 		if (autosaveTimeoutRef.current !== null) {
@@ -329,7 +431,8 @@ export const DocxReactView = forwardRef<DocxReactViewHandle, DocxReactViewProps>
 			key={`${file.path}-${file.stat.mtime}`}
 			ref={editorRef}
 			documentBuffer={buffer}
-			mode="editing"
+			mode={editorMode}
+			onModeChange={setMode}
 			author={authorName}
 			i18n={i18n}
 			className={editorClassNameRef.current}
