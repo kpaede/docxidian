@@ -1,4 +1,4 @@
-import { Notice, TFile, setIcon } from 'obsidian';
+import { Notice, Platform, TFile, setIcon } from 'obsidian';
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState, type ComponentProps } from 'react';
 import { DocxEditor, type DocxEditorRef, type EditorMode } from '@eigenpal/docx-editor-react';
 import type { Translations } from '@eigenpal/docx-editor-i18n';
@@ -29,6 +29,10 @@ interface DocxDocumentWithSectionProperties {
 
 const DEFAULT_PAGE_HEIGHT_TWIPS = 15840;
 const DEFAULT_MARGIN_TWIPS = 1440;
+const MIN_TOUCH_ZOOM = 0.25;
+const MAX_TOUCH_ZOOM = 4;
+const TOUCH_ZOOM_SENSITIVITY = 0.55;
+const TOUCH_ZOOM_MIN_DELTA = 0.006;
 
 type FindReplaceMode = 'find' | 'replace';
 
@@ -46,6 +50,25 @@ interface FindHighlightState {
 	matches: FindMatch[];
 	currentIndex: number;
 }
+
+interface PinchZoomState {
+	source: 'touch' | 'gesture' | 'pointer';
+	startDistance: number;
+	lastDistance: number;
+	startZoom: number;
+	lastZoom: number;
+}
+
+interface PointerPoint {
+	x: number;
+	y: number;
+}
+
+type WebKitGestureEvent = Event & {
+	clientX?: number;
+	clientY?: number;
+	scale?: number;
+};
 
 interface FindReplaceLabels {
 	find: string;
@@ -180,6 +203,64 @@ const FIND_REPLACE_LABELS: Record<DocxidianLanguage, FindReplaceLabels> = {
 };
 
 const findHighlightPluginKey = new PluginKey<FindHighlightState>('docxidian-find-highlight');
+
+function clampZoom(zoom: number) {
+	return Math.max(MIN_TOUCH_ZOOM, Math.min(MAX_TOUCH_ZOOM, Math.round(zoom * 100) / 100));
+}
+
+function scaleTouchZoom(startZoom: number, rawScale: number) {
+	if (!Number.isFinite(rawScale) || rawScale <= 0) {
+		return startZoom;
+	}
+
+	return clampZoom(startZoom * Math.pow(rawScale, TOUCH_ZOOM_SENSITIVITY));
+}
+
+function getTouchDistance(first: Touch, second: Touch) {
+	return Math.hypot(first.clientX - second.clientX, first.clientY - second.clientY);
+}
+
+function getTouchCenter(first: Touch, second: Touch) {
+	return {
+		x: (first.clientX + second.clientX) / 2,
+		y: (first.clientY + second.clientY) / 2,
+	};
+}
+
+function getPointDistance(first: PointerPoint, second: PointerPoint) {
+	return Math.hypot(first.x - second.x, first.y - second.y);
+}
+
+function getPointCenter(first: PointerPoint, second: PointerPoint) {
+	return {
+		x: (first.x + second.x) / 2,
+		y: (first.y + second.y) / 2,
+	};
+}
+
+function getScrollableEditorElement(root: HTMLElement) {
+	const pages = root.querySelector<HTMLElement>('.paged-editor__pages');
+	let candidate: HTMLElement | null = pages?.parentElement ?? root;
+
+	while (candidate && candidate !== root) {
+		const style = window.getComputedStyle(candidate);
+		const canScroll = /(auto|scroll)/.test(`${style.overflow} ${style.overflowX} ${style.overflowY}`);
+		if (canScroll && (candidate.scrollHeight > candidate.clientHeight || candidate.scrollWidth > candidate.clientWidth)) {
+			return candidate;
+		}
+		candidate = candidate.parentElement;
+	}
+
+	return root;
+}
+
+function shouldEnableTouchPinchZoom() {
+	if (typeof window === 'undefined' || typeof navigator === 'undefined') {
+		return false;
+	}
+
+	return Platform.isMobile || Platform.isMobileApp || (navigator.maxTouchPoints >= 2 && window.matchMedia('(hover: none)').matches);
+}
 
 function getEditorModeFromButton(button: HTMLButtonElement): EditorMode | null {
 	const label = button.textContent?.replace(/\s+/g, ' ').trim().toLowerCase() ?? '';
@@ -465,6 +546,9 @@ export const DocxReactView = forwardRef<DocxReactViewHandle, DocxReactViewProps>
 	const editorClassNameRef = useRef(`docxidian-editor-${++editorInstanceCounter}`);
 	const rulerSyncFrameRef = useRef<number | null>(null);
 	const rulerSyncTimeoutRef = useRef<number | null>(null);
+	const pinchZoomStateRef = useRef<PinchZoomState | null>(null);
+	const pinchZoomScrollFrameRef = useRef<number | null>(null);
+	const activeTouchPointersRef = useRef<Map<number, PointerPoint>>(new Map());
 	const dirtyTrackingEnabledRef = useRef(false);
 	const isSavingRef = useRef(false);
 	const autosaveTimeoutRef = useRef<number | null>(null);
@@ -846,6 +930,287 @@ export const DocxReactView = forwardRef<DocxReactViewHandle, DocxReactViewProps>
 			scheduleVerticalRulerMarkerSync(editorRef.current?.getDocument());
 		}
 	}, [showRuler, file, buffer, scheduleVerticalRulerMarkerSync]);
+
+	useEffect(() => {
+		if (!shouldEnableTouchPinchZoom()) {
+			return;
+		}
+
+		const editorRoot = document.querySelector<HTMLElement>(`.${editorClassNameRef.current}`);
+		if (!editorRoot) {
+			return;
+		}
+
+		const hostRoot = editorRoot.closest<HTMLElement>('.docxidian-host') ?? editorRoot;
+		const previousTouchAction = editorRoot.style.touchAction;
+		const previousHostTouchAction = hostRoot.style.touchAction;
+		editorRoot.style.touchAction = 'pan-x pan-y';
+		hostRoot.style.touchAction = 'pan-x pan-y';
+
+		const isEditorTarget = (target: EventTarget | null) => target instanceof Node && hostRoot.contains(target);
+
+		const shouldIgnoreGestureSource = (source: PinchZoomState['source']) => {
+			const activeSource = pinchZoomStateRef.current?.source;
+			return activeSource !== undefined && activeSource !== source;
+		};
+
+		const zoomAroundViewportPoint = (nextZoom: number, viewportPoint: PointerPoint, source: PinchZoomState['source']) => {
+			const pinchState = pinchZoomStateRef.current;
+			if (!pinchState || pinchState.source !== source || Math.abs(nextZoom - pinchState.lastZoom) < TOUCH_ZOOM_MIN_DELTA) {
+				return false;
+			}
+
+			const scrollContainer = getScrollableEditorElement(editorRoot);
+			const rect = scrollContainer.getBoundingClientRect();
+			const localX = viewportPoint.x - rect.left;
+			const localY = viewportPoint.y - rect.top;
+			const documentX = (scrollContainer.scrollLeft + localX) / pinchState.lastZoom;
+			const documentY = (scrollContainer.scrollTop + localY) / pinchState.lastZoom;
+
+			editorRef.current?.setZoom(nextZoom);
+			pinchState.lastZoom = nextZoom;
+
+			if (pinchZoomScrollFrameRef.current !== null) {
+				window.cancelAnimationFrame(pinchZoomScrollFrameRef.current);
+			}
+			pinchZoomScrollFrameRef.current = window.requestAnimationFrame(() => {
+				pinchZoomScrollFrameRef.current = null;
+				scrollContainer.scrollLeft = Math.max(0, documentX * nextZoom - localX);
+				scrollContainer.scrollTop = Math.max(0, documentY * nextZoom - localY);
+				scheduleVerticalRulerMarkerSync(editorRef.current?.getDocument());
+			});
+			return true;
+		};
+
+		const handleTouchStart = (evt: TouchEvent) => {
+			if (!isEditorTarget(evt.target)) {
+				return;
+			}
+			if (shouldIgnoreGestureSource('touch')) {
+				return;
+			}
+			if (evt.touches.length !== 2) {
+				if (pinchZoomStateRef.current?.source === 'touch') {
+					pinchZoomStateRef.current = null;
+				}
+				return;
+			}
+
+			const first = evt.touches.item(0);
+			const second = evt.touches.item(1);
+			if (!first || !second) {
+				return;
+			}
+			const startZoom = editorRef.current?.getZoom() ?? 1;
+			const startDistance = getTouchDistance(first, second);
+			if (startDistance <= 0) {
+				return;
+			}
+
+			evt.preventDefault();
+			evt.stopPropagation();
+			pinchZoomStateRef.current = {
+				source: 'touch',
+				startDistance,
+				lastDistance: startDistance,
+				startZoom,
+				lastZoom: startZoom,
+			};
+		};
+
+		const handleTouchMove = (evt: TouchEvent) => {
+			if (!isEditorTarget(evt.target)) {
+				return;
+			}
+			const pinchState = pinchZoomStateRef.current;
+			if (!pinchState || pinchState.source !== 'touch' || evt.touches.length !== 2) {
+				return;
+			}
+
+			evt.preventDefault();
+			evt.stopPropagation();
+
+			const first = evt.touches.item(0);
+			const second = evt.touches.item(1);
+			if (!first || !second) {
+				return;
+			}
+			const distance = getTouchDistance(first, second);
+			if (distance <= 0) {
+				return;
+			}
+
+			const center = getTouchCenter(first, second);
+			const didZoom = zoomAroundViewportPoint(scaleTouchZoom(pinchState.lastZoom, distance / pinchState.lastDistance), center, 'touch');
+			if (didZoom) {
+				pinchState.lastDistance = distance;
+			}
+		};
+
+		const handleTouchEnd = (evt: TouchEvent) => {
+			if (evt.touches.length < 2 && pinchZoomStateRef.current?.source === 'touch') {
+				pinchZoomStateRef.current = null;
+			}
+		};
+
+		const handleGestureEnd = () => {
+			if (pinchZoomStateRef.current?.source === 'gesture') {
+				pinchZoomStateRef.current = null;
+			}
+		};
+
+		const handleGestureStart = (evt: WebKitGestureEvent) => {
+			if (!isEditorTarget(evt.target)) {
+				return;
+			}
+			if (shouldIgnoreGestureSource('gesture')) {
+				return;
+			}
+
+			evt.preventDefault();
+			evt.stopPropagation();
+			const startZoom = editorRef.current?.getZoom() ?? 1;
+			pinchZoomStateRef.current = {
+				source: 'gesture',
+				startDistance: 1,
+				lastDistance: 1,
+				startZoom,
+				lastZoom: startZoom,
+			};
+		};
+
+		const handleGestureChange = (evt: WebKitGestureEvent) => {
+			if (!isEditorTarget(evt.target)) {
+				return;
+			}
+
+			const pinchState = pinchZoomStateRef.current;
+			if (!pinchState || typeof evt.scale !== 'number' || evt.scale <= 0) {
+				return;
+			}
+
+			evt.preventDefault();
+			evt.stopPropagation();
+
+			const scrollContainer = getScrollableEditorElement(editorRoot);
+			const rect = scrollContainer.getBoundingClientRect();
+			zoomAroundViewportPoint(scaleTouchZoom(pinchState.startZoom, evt.scale), {
+				x: evt.clientX ?? rect.left + rect.width / 2,
+				y: evt.clientY ?? rect.top + rect.height / 2,
+			}, 'gesture');
+		};
+
+		const handlePointerDown = (evt: PointerEvent) => {
+			if (evt.pointerType !== 'touch' || !isEditorTarget(evt.target)) {
+				return;
+			}
+			if (shouldIgnoreGestureSource('pointer')) {
+				return;
+			}
+
+			activeTouchPointersRef.current.set(evt.pointerId, { x: evt.clientX, y: evt.clientY });
+			if (activeTouchPointersRef.current.size !== 2) {
+				return;
+			}
+
+			const [first, second] = Array.from(activeTouchPointersRef.current.values());
+			if (!first || !second) {
+				return;
+			}
+			const startDistance = getPointDistance(first, second);
+			if (startDistance <= 0) {
+				return;
+			}
+
+			evt.preventDefault();
+			evt.stopPropagation();
+			const startZoom = editorRef.current?.getZoom() ?? 1;
+			pinchZoomStateRef.current = {
+				source: 'pointer',
+				startDistance,
+				lastDistance: startDistance,
+				startZoom,
+				lastZoom: startZoom,
+			};
+		};
+
+		const handlePointerMove = (evt: PointerEvent) => {
+			if (evt.pointerType !== 'touch' || !activeTouchPointersRef.current.has(evt.pointerId)) {
+				return;
+			}
+
+			activeTouchPointersRef.current.set(evt.pointerId, { x: evt.clientX, y: evt.clientY });
+			const pinchState = pinchZoomStateRef.current;
+			if (!pinchState || pinchState.source !== 'pointer' || activeTouchPointersRef.current.size !== 2) {
+				return;
+			}
+
+			evt.preventDefault();
+			evt.stopPropagation();
+			const [first, second] = Array.from(activeTouchPointersRef.current.values());
+			if (!first || !second) {
+				return;
+			}
+			const distance = getPointDistance(first, second);
+			if (distance <= 0) {
+				return;
+			}
+
+			const didZoom = zoomAroundViewportPoint(
+				scaleTouchZoom(pinchState.lastZoom, distance / pinchState.lastDistance),
+				getPointCenter(first, second),
+				'pointer',
+			);
+			if (didZoom) {
+				pinchState.lastDistance = distance;
+			}
+		};
+
+		const handlePointerEnd = (evt: PointerEvent) => {
+			if (evt.pointerType !== 'touch') {
+				return;
+			}
+
+			activeTouchPointersRef.current.delete(evt.pointerId);
+			if (activeTouchPointersRef.current.size < 2 && pinchZoomStateRef.current?.source === 'pointer') {
+				pinchZoomStateRef.current = null;
+			}
+		};
+
+		document.addEventListener('touchstart', handleTouchStart, { passive: false, capture: true });
+		document.addEventListener('touchmove', handleTouchMove, { passive: false, capture: true });
+		document.addEventListener('touchend', handleTouchEnd, { passive: true, capture: true });
+		document.addEventListener('touchcancel', handleTouchEnd, { passive: true, capture: true });
+		document.addEventListener('gesturestart', handleGestureStart, { passive: false, capture: true });
+		document.addEventListener('gesturechange', handleGestureChange, { passive: false, capture: true });
+		document.addEventListener('gestureend', handleGestureEnd, { passive: true, capture: true });
+		document.addEventListener('pointerdown', handlePointerDown, { passive: false, capture: true });
+		document.addEventListener('pointermove', handlePointerMove, { passive: false, capture: true });
+		document.addEventListener('pointerup', handlePointerEnd, { passive: true, capture: true });
+		document.addEventListener('pointercancel', handlePointerEnd, { passive: true, capture: true });
+
+		return () => {
+			editorRoot.style.touchAction = previousTouchAction;
+			hostRoot.style.touchAction = previousHostTouchAction;
+			document.removeEventListener('touchstart', handleTouchStart, true);
+			document.removeEventListener('touchmove', handleTouchMove, true);
+			document.removeEventListener('touchend', handleTouchEnd, true);
+			document.removeEventListener('touchcancel', handleTouchEnd, true);
+			document.removeEventListener('gesturestart', handleGestureStart, true);
+			document.removeEventListener('gesturechange', handleGestureChange, true);
+			document.removeEventListener('gestureend', handleGestureEnd, true);
+			document.removeEventListener('pointerdown', handlePointerDown, true);
+			document.removeEventListener('pointermove', handlePointerMove, true);
+			document.removeEventListener('pointerup', handlePointerEnd, true);
+			document.removeEventListener('pointercancel', handlePointerEnd, true);
+			pinchZoomStateRef.current = null;
+			activeTouchPointersRef.current.clear();
+			if (pinchZoomScrollFrameRef.current !== null) {
+				window.cancelAnimationFrame(pinchZoomScrollFrameRef.current);
+				pinchZoomScrollFrameRef.current = null;
+			}
+		};
+	}, [buffer, filePath, isLoading, scheduleVerticalRulerMarkerSync]);
 
 	useEffect(() => () => {
 		clearAutosaveTimeout();
