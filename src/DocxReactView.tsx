@@ -5,6 +5,27 @@ import type { Translations } from '@eigenpal/docx-editor-i18n';
 import editorStyles from '@eigenpal/docx-editor-react/styles.css';
 
 let stylesInjected = false;
+let editorInstanceCounter = 0;
+
+interface DocxSectionProperties {
+	pageHeight?: number;
+	marginTop?: number;
+	marginBottom?: number;
+}
+
+interface DocxDocumentWithSectionProperties {
+	package?: {
+		document?: {
+			finalSectionProperties?: DocxSectionProperties;
+			sections?: Array<{
+				properties?: DocxSectionProperties;
+			}>;
+		};
+	};
+}
+
+const DEFAULT_PAGE_HEIGHT_TWIPS = 15840;
+const DEFAULT_MARGIN_TWIPS = 1440;
 
 export function ensureEditorStyles() {
 	if (stylesInjected) {
@@ -72,6 +93,9 @@ export const DocxReactView = forwardRef<DocxReactViewHandle, DocxReactViewProps>
 	ref,
 ) {
 	const editorRef = useRef<DocxEditorRef>(null);
+	const editorClassNameRef = useRef(`docxidian-editor-${++editorInstanceCounter}`);
+	const rulerSyncFrameRef = useRef<number | null>(null);
+	const rulerSyncTimeoutRef = useRef<number | null>(null);
 	const dirtyTrackingEnabledRef = useRef(false);
 	const isSavingRef = useRef(false);
 	const autosaveTimeoutRef = useRef<number | null>(null);
@@ -127,9 +151,73 @@ export const DocxReactView = forwardRef<DocxReactViewHandle, DocxReactViewProps>
 		}
 	}, []);
 
+	const syncVerticalRulerMarkers = useCallback((docxDocument: DocxDocumentWithSectionProperties | null | undefined) => {
+		if (!showRuler || !docxDocument) {
+			return;
+		}
+
+		const documentProperties = docxDocument.package?.document;
+		const sectionProperties = {
+			...documentProperties?.sections?.[0]?.properties,
+			...documentProperties?.finalSectionProperties,
+		};
+		const pageHeight = sectionProperties.pageHeight ?? DEFAULT_PAGE_HEIGHT_TWIPS;
+		const topMargin = sectionProperties.marginTop ?? DEFAULT_MARGIN_TWIPS;
+		const bottomMargin = sectionProperties.marginBottom ?? DEFAULT_MARGIN_TWIPS;
+		const ruler = document.querySelector<HTMLElement>(`.${editorClassNameRef.current} .docx-vertical-ruler`);
+
+		if (!ruler || pageHeight <= 0) {
+			return;
+		}
+
+		const pxPerTwip = ruler.getBoundingClientRect().height / pageHeight;
+		const topMarker = ruler.querySelector<HTMLElement>('.docx-ruler-marker-topMargin');
+		const bottomMarker = ruler.querySelector<HTMLElement>('.docx-ruler-marker-bottomMargin');
+
+		if (topMarker) {
+			topMarker.style.top = `${Math.round(topMargin * pxPerTwip - 5)}px`;
+		}
+		if (bottomMarker) {
+			bottomMarker.style.top = `${Math.round((pageHeight - bottomMargin) * pxPerTwip - 5)}px`;
+		}
+	}, [showRuler]);
+
+	const scheduleVerticalRulerMarkerSync = useCallback((document: DocxDocumentWithSectionProperties | null | undefined) => {
+		if (rulerSyncFrameRef.current !== null) {
+			window.cancelAnimationFrame(rulerSyncFrameRef.current);
+		}
+		if (rulerSyncTimeoutRef.current !== null) {
+			window.clearTimeout(rulerSyncTimeoutRef.current);
+		}
+
+		rulerSyncFrameRef.current = window.requestAnimationFrame(() => {
+			rulerSyncFrameRef.current = null;
+			syncVerticalRulerMarkers(document);
+			window.requestAnimationFrame(() => syncVerticalRulerMarkers(document));
+		});
+		rulerSyncTimeoutRef.current = window.setTimeout(() => {
+			rulerSyncTimeoutRef.current = null;
+			syncVerticalRulerMarkers(document);
+		}, 50);
+	}, [syncVerticalRulerMarkers]);
+
+	useEffect(() => {
+		if (showRuler) {
+			scheduleVerticalRulerMarkerSync(editorRef.current?.getDocument());
+		}
+	}, [showRuler, file, buffer, scheduleVerticalRulerMarkerSync]);
+
 	useEffect(() => () => {
 		clearAutosaveTimeout();
 		clearRenameTimeout();
+		if (rulerSyncFrameRef.current !== null) {
+			window.cancelAnimationFrame(rulerSyncFrameRef.current);
+			rulerSyncFrameRef.current = null;
+		}
+		if (rulerSyncTimeoutRef.current !== null) {
+			window.clearTimeout(rulerSyncTimeoutRef.current);
+			rulerSyncTimeoutRef.current = null;
+		}
 	}, [clearAutosaveTimeout, clearRenameTimeout]);
 
 	const persistDocument = useCallback(async (output: ArrayBuffer, options?: { silent?: boolean }) => {
@@ -244,6 +332,7 @@ export const DocxReactView = forwardRef<DocxReactViewHandle, DocxReactViewProps>
 			mode="editing"
 			author={authorName}
 			i18n={i18n}
+			className={editorClassNameRef.current}
 			showRuler={showRuler}
 			documentName={documentName}
 			documentNameEditable
@@ -260,6 +349,7 @@ export const DocxReactView = forwardRef<DocxReactViewHandle, DocxReactViewProps>
 					onDirtyChange(true);
 					scheduleAutosave();
 				}
+				scheduleVerticalRulerMarkerSync(editorRef.current?.getDocument());
 			}}
 			onSave={(output) => {
 				const savePromise = persistDocument(output, pendingSaveOptionsRef.current);
