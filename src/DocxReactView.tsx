@@ -166,39 +166,69 @@ export const DocxReactView = forwardRef<DocxReactViewHandle, DocxReactViewProps>
 			return;
 		}
 
-		const modeButtons = Array.from(editorRoot.querySelectorAll<HTMLButtonElement>('button'))
-			.filter((button) => getEditorModeFromButton(button) !== null);
-		const menuItemButtons = modeButtons.filter((button) => button.querySelector(':scope span span'));
+		const modeMenus = Array.from(document.querySelectorAll<HTMLElement>('div[style*="position: fixed"]'))
+			.map((menu) => ({
+				menu,
+				buttons: Array.from(menu.querySelectorAll<HTMLButtonElement>(':scope > button'))
+					.filter((button) => getEditorModeFromButton(button) !== null && button.querySelector(':scope span span')),
+			}))
+			.filter(({ buttons }) => {
+				const modes = new Set(buttons.map((button) => getEditorModeFromButton(button)));
+				return buttons.length === 3 && modes.has('editing') && modes.has('suggesting') && modes.has('viewing');
+			});
 
-		menuItemButtons.forEach((button) => {
-			button.style.alignItems = 'center';
-			button.style.boxShadow = 'none';
-			button.style.gap = '10px';
-			button.style.justifyContent = 'flex-start';
-			button.style.lineHeight = 'normal';
-			button.style.minHeight = '48px';
-			button.style.padding = '8px 12px';
-
-			const icon = button.querySelector<HTMLElement>(':scope > svg:first-child');
-			if (icon) {
-				icon.style.display = 'inline-flex';
-				icon.style.flex = '0 0 20px';
-				icon.style.height = '20px';
-				icon.style.width = '20px';
-			}
-
-			const labelColumn = button.querySelector<HTMLElement>(':scope > span');
-			if (labelColumn) {
-				labelColumn.style.flex = '1 1 auto';
-				labelColumn.style.minWidth = '0';
-			}
-		});
-
-		const menu = menuItemButtons[0]?.parentElement;
-		if (menu instanceof HTMLElement && menuItemButtons.length === 3) {
+		modeMenus.forEach(({ menu, buttons }) => {
+			menu.dataset.docxidianModeMenu = 'true';
+			menu.style.minWidth = '260px';
 			menu.style.padding = '4px 0';
 			menu.style.overflow = 'hidden';
-		}
+
+			buttons.forEach((button) => {
+				const mode = getEditorModeFromButton(button);
+				if (mode) {
+					button.dataset.docxidianModeMenuItem = mode;
+				}
+
+				button.style.alignItems = 'center';
+				button.style.boxShadow = 'none';
+				button.style.columnGap = '10px';
+				button.style.display = 'grid';
+				button.style.gridTemplateColumns = '24px minmax(0, 1fr) 20px';
+				button.style.justifyContent = 'start';
+				button.style.justifyItems = 'start';
+				button.style.lineHeight = 'normal';
+				button.style.minHeight = '48px';
+				button.style.padding = '8px 12px';
+				button.style.width = '100%';
+
+				const icon = button.querySelector<HTMLElement>(':scope > svg:first-child');
+				if (icon) {
+					icon.style.display = 'inline-flex';
+					icon.style.flex = '0 0 20px';
+					icon.style.gridColumn = '1';
+					icon.style.height = '20px';
+					icon.style.justifySelf = 'start';
+					icon.style.marginLeft = '0';
+					icon.style.width = '20px';
+				}
+
+				const labelColumn = button.querySelector<HTMLElement>(':scope > span');
+				if (labelColumn) {
+					labelColumn.style.flex = '1 1 auto';
+					labelColumn.style.gridColumn = '2';
+					labelColumn.style.justifySelf = 'stretch';
+					labelColumn.style.marginLeft = '0';
+					labelColumn.style.minWidth = '0';
+				}
+
+				const checkIcon = button.querySelector<HTMLElement>(':scope > svg:last-child:not(:first-child)');
+				if (checkIcon) {
+					checkIcon.style.gridColumn = '3';
+					checkIcon.style.justifySelf = 'end';
+					checkIcon.style.marginLeft = '0';
+				}
+			});
+		});
 	}, []);
 
 	useEffect(() => {
@@ -209,7 +239,7 @@ export const DocxReactView = forwardRef<DocxReactViewHandle, DocxReactViewProps>
 
 		normalizeEditorModeDropdown();
 		const observer = new MutationObserver(normalizeEditorModeDropdown);
-		observer.observe(editorRoot, {
+		observer.observe(document.body, {
 			childList: true,
 			subtree: true,
 		});
@@ -220,15 +250,19 @@ export const DocxReactView = forwardRef<DocxReactViewHandle, DocxReactViewProps>
 	useEffect(() => {
 		const handleModePointerDown = (evt: PointerEvent) => {
 			const editorRoot = document.querySelector<HTMLElement>(`.${editorClassNameRef.current}`);
-			if (!editorRoot || !(evt.target instanceof Element) || !editorRoot.contains(evt.target)) {
+			if (!editorRoot || !(evt.target instanceof Element)) {
 				return;
 			}
 
 			const button = evt.target.closest('button');
-			if (!(button instanceof HTMLButtonElement) || !editorRoot.contains(button)) {
+			if (!(button instanceof HTMLButtonElement)) {
 				return;
 			}
 
+			const isEditorModeButton = editorRoot.contains(button) || button.closest('[data-docxidian-mode-menu]');
+			if (!isEditorModeButton) {
+				return;
+			}
 			const mode = getEditorModeFromButton(button);
 			if (mode) {
 				window.setTimeout(() => setMode(mode), 0);
