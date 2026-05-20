@@ -1,6 +1,7 @@
 import { App, FileView, Modal, Notice, TFile, WorkspaceLeaf } from 'obsidian';
 import { createRef } from 'react';
 import { Root, createRoot } from 'react-dom/client';
+import type { Translations } from '@eigenpal/docx-editor-i18n';
 import { DocxReactView, DocxReactViewHandle } from './DocxReactView';
 
 export const VIEW_TYPE_DOCX = 'docxidian-docx-view';
@@ -84,7 +85,11 @@ export class DocxView extends FileView {
 	private hostResizeObserver: ResizeObserver | null = null;
 	private titleObserver: MutationObserver | null = null;
 
-	constructor(leaf: WorkspaceLeaf, private getAuthorName: () => string) {
+	constructor(
+		leaf: WorkspaceLeaf,
+		private getAuthorName: () => string,
+		private getEditorLocale: () => Translations | undefined,
+	) {
 		super(leaf);
 	}
 
@@ -181,6 +186,10 @@ export class DocxView extends FileView {
 		}
 
 		return saved;
+	}
+
+	refreshSettings() {
+		this.render();
 	}
 
 	private async saveFile(buffer: ArrayBuffer) {
@@ -340,6 +349,7 @@ export class DocxView extends FileView {
 				error={this.error}
 				isLoading={this.isLoading}
 				authorName={this.getAuthorName()}
+				i18n={this.getEditorLocale()}
 				onDirtyChange={(isDirty) => {
 					this.isDirty = isDirty;
 				}}

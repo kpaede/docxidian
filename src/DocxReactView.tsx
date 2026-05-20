@@ -1,6 +1,7 @@
 import { Notice, TFile, setIcon } from 'obsidian';
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef } from 'react';
 import { DocxEditor, DocxEditorRef } from '@eigenpal/docx-editor-react';
+import type { Translations } from '@eigenpal/docx-editor-i18n';
 import editorStyles from '@eigenpal/docx-editor-react/styles.css';
 
 let stylesInjected = false;
@@ -54,6 +55,7 @@ export interface DocxReactViewProps {
 	error: string | null;
 	isLoading: boolean;
 	authorName: string;
+	i18n: Translations | undefined;
 	onDirtyChange: (isDirty: boolean) => void;
 	onSave: (buffer: ArrayBuffer) => Promise<void>;
 }
@@ -63,7 +65,7 @@ export interface DocxReactViewHandle {
 }
 
 export const DocxReactView = forwardRef<DocxReactViewHandle, DocxReactViewProps>(function DocxReactView(
-	{ file, buffer, error, isLoading, authorName, onDirtyChange, onSave },
+	{ file, buffer, error, isLoading, authorName, i18n, onDirtyChange, onSave },
 	ref,
 ) {
 	const editorRef = useRef<DocxEditorRef>(null);
@@ -149,6 +151,7 @@ export const DocxReactView = forwardRef<DocxReactViewHandle, DocxReactViewProps>
 			documentBuffer={buffer}
 			mode="editing"
 			author={authorName}
+			i18n={i18n}
 			documentName={file.basename}
 			documentNameEditable={false}
 			renderLogo={() => (

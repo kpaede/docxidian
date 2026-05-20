@@ -2,6 +2,7 @@ import { App, Component, MarkdownPostProcessorContext, MarkdownRenderChild, Plug
 import { useCallback, useEffect, useRef } from 'react';
 import { createRoot, Root } from 'react-dom/client';
 import { DocxEditor } from '@eigenpal/docx-editor-react';
+import type { Translations } from '@eigenpal/docx-editor-i18n';
 import { ensureEditorStyles } from './DocxReactView';
 
 const DOCX_EMBED_SELECTOR = '.internal-embed[src], .internal-embed[data-src]';
@@ -23,7 +24,17 @@ function resolveDocxEmbed(app: App, linkPath: string, sourcePath: string) {
 	return file instanceof TFile && file.extension.toLowerCase() === 'docx' ? file : null;
 }
 
-function DocxEmbedPreview({ file, buffer, hostEl }: { file: TFile; buffer: ArrayBuffer; hostEl: HTMLElement }) {
+function DocxEmbedPreview({
+	file,
+	buffer,
+	hostEl,
+	i18n,
+}: {
+	file: TFile;
+	buffer: ArrayBuffer;
+	hostEl: HTMLElement;
+	i18n: Translations | undefined;
+}) {
 	const sourceRef = useRef<HTMLDivElement>(null);
 	const pagesRef = useRef<HTMLDivElement>(null);
 	const syncFrameRef = useRef<number | null>(null);
@@ -104,6 +115,7 @@ function DocxEmbedPreview({ file, buffer, hostEl }: { file: TFile; buffer: Array
 					className="docxidian-embed-editor"
 					documentBuffer={buffer}
 					disableFindReplaceShortcuts
+					i18n={i18n}
 					initialZoom={1}
 					readOnly
 					showOutlineButton={false}
@@ -142,6 +154,7 @@ export class DocxFileEmbed extends Component {
 		private info: EmbedInfo,
 		private app: App,
 		private file: TFile,
+		private getEditorLocale: () => Translations | undefined,
 		private subpath = '',
 	) {
 		super();
@@ -178,7 +191,7 @@ export class DocxFileEmbed extends Component {
 			containerEl.empty();
 			const hostEl = containerEl.createDiv({ cls: 'docxidian-embed-host' });
 			this.root = createRoot(hostEl);
-			this.root.render(<DocxEmbedPreview file={this.file} buffer={buffer} hostEl={hostEl} />);
+			this.root.render(<DocxEmbedPreview file={this.file} buffer={buffer} hostEl={hostEl} i18n={this.getEditorLocale()} />);
 		} catch (error) {
 			if (this.unloaded) {
 				return;
@@ -204,9 +217,15 @@ export class DocxFileEmbed extends Component {
 class DocxEmbedRenderChild extends MarkdownRenderChild {
 	private embed: DocxFileEmbed;
 
-	constructor(containerEl: HTMLElement, app: App, file: TFile, subpath: string) {
+	constructor(
+		containerEl: HTMLElement,
+		app: App,
+		file: TFile,
+		subpath: string,
+		getEditorLocale: () => Translations | undefined,
+	) {
 		super(containerEl);
-		this.embed = new DocxFileEmbed({ containerEl }, app, file, subpath);
+		this.embed = new DocxFileEmbed({ containerEl }, app, file, getEditorLocale, subpath);
 		this.addChild(this.embed);
 	}
 }
@@ -219,6 +238,7 @@ class DocxEmbedScanChild extends MarkdownRenderChild {
 		containerEl: HTMLElement,
 		private app: App,
 		private ctx: MarkdownPostProcessorContext,
+		private getEditorLocale: () => Translations | undefined,
 	) {
 		super(containerEl);
 	}
@@ -258,7 +278,7 @@ class DocxEmbedScanChild extends MarkdownRenderChild {
 	}
 
 	private scan() {
-		renderDocxEmbeds(this.app, this.containerEl, this.ctx);
+		renderDocxEmbeds(this.app, this.containerEl, this.ctx, this.getEditorLocale);
 	}
 }
 
@@ -271,7 +291,12 @@ function collectEmbedElements(el: HTMLElement) {
 	return embeds;
 }
 
-export function renderDocxEmbeds(app: App, el: HTMLElement, ctx: MarkdownPostProcessorContext) {
+export function renderDocxEmbeds(
+	app: App,
+	el: HTMLElement,
+	ctx: MarkdownPostProcessorContext,
+	getEditorLocale: () => Translations | undefined,
+) {
 	const embeds = collectEmbedElements(el);
 
 	for (const embedEl of embeds) {
@@ -290,21 +315,26 @@ export function renderDocxEmbeds(app: App, el: HTMLElement, ctx: MarkdownPostPro
 		}
 
 		embedEl.dataset.docxidianEmbed = 'true';
-		ctx.addChild(new DocxEmbedRenderChild(embedEl, app, file, linkPath.split('#')[1] ?? ''));
+		ctx.addChild(new DocxEmbedRenderChild(embedEl, app, file, linkPath.split('#')[1] ?? '', getEditorLocale));
 	}
 }
 
-export function processDocxEmbeds(app: App, el: HTMLElement, ctx: MarkdownPostProcessorContext) {
-	ctx.addChild(new DocxEmbedScanChild(el, app, ctx));
+export function processDocxEmbeds(
+	app: App,
+	el: HTMLElement,
+	ctx: MarkdownPostProcessorContext,
+	getEditorLocale: () => Translations | undefined,
+) {
+	ctx.addChild(new DocxEmbedScanChild(el, app, ctx, getEditorLocale));
 }
 
-export function registerDocxFileEmbed(plugin: Plugin) {
+export function registerDocxFileEmbed(plugin: Plugin, getEditorLocale: () => Translations | undefined) {
 	const registry = getEmbedRegistry(plugin.app);
 	if (!registry) {
 		return false;
 	}
 
-	const createEmbed: DocxFileEmbedCreator = (info, file, subpath) => new DocxFileEmbed(info, plugin.app, file, subpath);
+	const createEmbed: DocxFileEmbedCreator = (info, file, subpath) => new DocxFileEmbed(info, plugin.app, file, getEditorLocale, subpath);
 
 	try {
 		if (typeof registry.registerExtension === 'function') {

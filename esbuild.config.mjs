@@ -34,6 +34,12 @@ const context = await esbuild.context({
 		...builtinModules],
 	format: "cjs",
 	target: "es2018",
+	alias: {
+		"jszip": "./node_modules/jszip/lib/index.js",
+		"immediate": "./src/shims/immediate.cjs",
+		"readable-stream": "./node_modules/jszip/lib/readable-stream-browser.js",
+		"setimmediate": "./src/shims/setimmediate.ts",
+	},
 	loader: {
 		".css": "text",
 	},

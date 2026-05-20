@@ -2,6 +2,7 @@ import { Notice, Plugin } from 'obsidian';
 import { DEFAULT_SETTINGS, DocxidianSettings, DocxidianSettingTab } from './settings';
 import { processDocxEmbeds, registerDocxFileEmbed } from './DocxEmbed';
 import { DocxView, VIEW_TYPE_DOCX } from './DocxView';
+import { getDocxEditorLocale, normalizeDocxidianLanguage } from './locales';
 
 const DOCX_EXTENSIONS = ['docx'];
 
@@ -13,12 +14,16 @@ export default class DocxidianPlugin extends Plugin {
 
 		this.registerView(
 			VIEW_TYPE_DOCX,
-			(leaf) => new DocxView(leaf, () => this.settings.authorName),
+			(leaf) => new DocxView(
+				leaf,
+				() => this.settings.authorName,
+				() => getDocxEditorLocale(this.settings.editorLanguage),
+			),
 		);
 		this.registerExtensions(DOCX_EXTENSIONS, VIEW_TYPE_DOCX);
-		registerDocxFileEmbed(this);
+		registerDocxFileEmbed(this, () => getDocxEditorLocale(this.settings.editorLanguage));
 		this.registerMarkdownPostProcessor((el, ctx) => {
-			processDocxEmbeds(this.app, el, ctx);
+			processDocxEmbeds(this.app, el, ctx, () => getDocxEditorLocale(this.settings.editorLanguage));
 		}, 1000);
 
 		this.addCommand({
@@ -43,9 +48,19 @@ export default class DocxidianPlugin extends Plugin {
 
 	async loadSettings() {
 		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData() as Partial<DocxidianSettings>);
+		this.settings.editorLanguage = normalizeDocxidianLanguage(this.settings.editorLanguage);
 	}
 
 	async saveSettings() {
 		await this.saveData(this.settings);
+	}
+
+	refreshDocxViews() {
+		for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE_DOCX)) {
+			const view = leaf.view;
+			if (view instanceof DocxView) {
+				view.refreshSettings();
+			}
+		}
 	}
 }
