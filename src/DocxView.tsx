@@ -115,6 +115,7 @@ export class DocxView extends FileView {
 		this.prepareViewHost();
 		this.registerHostMetrics();
 		this.removeNativeButtonTitles();
+		this.trackEditorHoverState();
 		this.registerEditorSaveInterceptor();
 		this.registerSaveShortcut();
 		this.root = createRoot(this.hostEl);
@@ -129,6 +130,7 @@ export class DocxView extends FileView {
 		this.hostResizeObserver = null;
 		this.titleObserver?.disconnect();
 		this.titleObserver = null;
+		document.body.classList.remove('docxidian-editor-hovering');
 		this.hostEl = null;
 		this.reactViewRef = createRef<DocxReactViewHandle>();
 		this.buffer = null;
@@ -303,6 +305,19 @@ export class DocxView extends FileView {
 			this.titleObserver?.disconnect();
 			this.titleObserver = null;
 		});
+	}
+
+	private trackEditorHoverState() {
+		if (!this.hostEl) {
+			return;
+		}
+
+		const markEditorHovering = () => document.body.classList.add('docxidian-editor-hovering');
+		const clearEditorHovering = () => document.body.classList.remove('docxidian-editor-hovering');
+
+		this.registerDomEvent(this.hostEl, 'pointerenter', markEditorHovering);
+		this.registerDomEvent(this.hostEl, 'pointerleave', clearEditorHovering);
+		this.register(clearEditorHovering);
 	}
 
 	private registerEditorSaveInterceptor() {

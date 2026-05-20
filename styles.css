@@ -32,35 +32,35 @@
 	font: inherit;
 }
 
-.docxidian-host .ep-root button {
+.workspace-leaf-content[data-type='docxidian-docx-view'] .docxidian-host .ep-root button {
 	appearance: none;
-	box-shadow: none !important;
+	box-shadow: none;
 }
 
-.docxidian-host .ep-root button:hover,
-.docxidian-host .ep-root button:focus,
-.docxidian-host .ep-root button:active {
-	box-shadow: none !important;
+.workspace-leaf-content[data-type='docxidian-docx-view'] .docxidian-host .ep-root button:hover,
+.workspace-leaf-content[data-type='docxidian-docx-view'] .docxidian-host .ep-root button:focus,
+.workspace-leaf-content[data-type='docxidian-docx-view'] .docxidian-host .ep-root button:active {
+	box-shadow: none;
 }
 
-.docxidian-host .ep-root [data-testid='editor-toolbar'] button.h-7.w-7,
-.docxidian-host .ep-root .docx-list-button {
-	background-color: transparent !important;
-	border-color: transparent !important;
-	border-style: solid !important;
-	border-width: 0 !important;
+.workspace-leaf-content[data-type='docxidian-docx-view'] .docxidian-host .ep-root [data-testid='editor-toolbar'] button.h-7.w-7,
+.workspace-leaf-content[data-type='docxidian-docx-view'] .docxidian-host .ep-root .docx-list-button {
+	background-color: transparent;
+	border-color: transparent;
+	border-style: solid;
+	border-width: 0;
 }
 
-.docxidian-host .ep-root [data-testid='editor-toolbar'] button.h-7.w-7:hover,
-.docxidian-host .ep-root [data-testid='editor-toolbar'] button.h-7.w-7:focus,
-.docxidian-host .ep-root .docx-list-button:hover,
-.docxidian-host .ep-root .docx-list-button:focus {
-	background-color: rgba(241, 245, 249, 0.8) !important;
+.workspace-leaf-content[data-type='docxidian-docx-view'] .docxidian-host .ep-root [data-testid='editor-toolbar'] button.h-7.w-7:hover,
+.workspace-leaf-content[data-type='docxidian-docx-view'] .docxidian-host .ep-root [data-testid='editor-toolbar'] button.h-7.w-7:focus,
+.workspace-leaf-content[data-type='docxidian-docx-view'] .docxidian-host .ep-root .docx-list-button:hover,
+.workspace-leaf-content[data-type='docxidian-docx-view'] .docxidian-host .ep-root .docx-list-button:focus {
+	background-color: rgba(241, 245, 249, 0.8);
 }
 
-.docxidian-host .ep-root [data-testid='editor-toolbar'] button.h-7.w-7[aria-pressed='true'],
-.docxidian-host .ep-root .docx-list-button-active {
-	background-color: var(--doc-primary-light) !important;
+.workspace-leaf-content[data-type='docxidian-docx-view'] .docxidian-host .ep-root [data-testid='editor-toolbar'] button.h-7.w-7[aria-pressed='true'],
+.workspace-leaf-content[data-type='docxidian-docx-view'] .docxidian-host .ep-root .docx-list-button-active {
+	background-color: var(--doc-primary-light);
 }
 
 .docxidian-host .ep-root .docx-text-context-menu {
@@ -88,16 +88,16 @@
 	z-index: 100010;
 }
 
-.docxidian-host .ep-root [role='menubar'] [style*='position: fixed'] {
-	z-index: 100020 !important;
+.workspace-leaf-content[data-type='docxidian-docx-view'] .docxidian-host .ep-root [role='menubar'] [style*='position: fixed'] {
+	z-index: 100020;
 }
 
-.docxidian-host .ep-root .docx-outline-nav {
-	z-index: 1 !important;
+.workspace-leaf-content[data-type='docxidian-docx-view'] .docxidian-host .ep-root .docx-outline-nav {
+	z-index: 1;
 }
 
-.docxidian-host .ep-root [role='menubar'] [style*='position: fixed'] > div:first-child {
-	display: none !important;
+.workspace-leaf-content[data-type='docxidian-docx-view'] .docxidian-host .ep-root [role='menubar'] [style*='position: fixed'] > div:first-child {
+	display: none;
 }
 
 .docxidian-embed {
@@ -163,7 +163,16 @@
 
 body > .ep-root,
 .ep-root [data-radix-popper-content-wrapper] {
-	z-index: 100000 !important;
+	z-index: 100000;
+}
+
+/* Hide the editor's custom shortcut tooltip; Obsidian supplies the visible label tooltip. */
+body.docxidian-editor-hovering
+	.workspace-leaf-content[data-type='docxidian-docx-view']
+	.docxidian-host
+	.ep-root
+	.fixed.z-50.bg-slate-900.rounded-md.shadow-lg:not([role]) {
+	display: none;
 }
 
 .docxidian-unsaved-actions {
@@ -175,10 +184,10 @@ body > .ep-root,
 
 .docxidian-title-save-button {
 	align-items: center;
-	background: var(--interactive-accent) !important;
+	background: var(--interactive-accent);
 	border: 0;
 	border-radius: 6px;
-	color: var(--text-on-accent) !important;
+	color: var(--text-on-accent);
 	cursor: pointer;
 	display: inline-flex;
 	font-size: var(--font-ui-small);
@@ -190,5 +199,5 @@ body > .ep-root,
 
 .docxidian-title-save-button:hover,
 .docxidian-title-save-button:focus {
-	background: var(--interactive-accent-hover) !important;
+	background: var(--interactive-accent-hover);
 }

@@ -33,7 +33,6 @@ const SaveButton = ({ onClick }: { onClick: () => void }) => {
 			className="clickable-icon docxidian-logo-save-button"
 			onClick={onClick}
 			aria-label="Save"
-			title="Save"
 			style={{ 
 				background: 'transparent',
 				border: 'none',
