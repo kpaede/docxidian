@@ -5,11 +5,15 @@ import { DOCXIDIAN_LANGUAGE_OPTIONS, DEFAULT_LANGUAGE, normalizeDocxidianLanguag
 export interface DocxidianSettings {
 	authorName: string;
 	editorLanguage: DocxidianLanguage;
+	showRuler: boolean;
+	autosave: boolean;
 }
 
 export const DEFAULT_SETTINGS: DocxidianSettings = {
 	authorName: 'Obsidian',
 	editorLanguage: DEFAULT_LANGUAGE,
+	showRuler: false,
+	autosave: false,
 };
 
 export class DocxidianSettingTab extends PluginSettingTab {
@@ -52,5 +56,27 @@ export class DocxidianSettingTab extends PluginSettingTab {
 						this.plugin.refreshDocxViews();
 					});
 			});
+
+		new Setting(containerEl)
+			.setName('Show ruler')
+			.setDesc('Show the page ruler above the document body.')
+			.addToggle(toggle => toggle
+				.setValue(this.plugin.settings.showRuler)
+				.onChange(async (value) => {
+					this.plugin.settings.showRuler = value;
+					await this.plugin.saveSettings();
+					this.plugin.refreshDocxViews();
+				}));
+
+		new Setting(containerEl)
+			.setName('Autosave')
+			.setDesc('Automatically save the document shortly after changes.')
+			.addToggle(toggle => toggle
+				.setValue(this.plugin.settings.autosave)
+				.onChange(async (value) => {
+					this.plugin.settings.autosave = value;
+					await this.plugin.saveSettings();
+					this.plugin.refreshDocxViews();
+				}));
 	}
 }

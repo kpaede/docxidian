@@ -18,6 +18,8 @@ export default class DocxidianPlugin extends Plugin {
 				leaf,
 				() => this.settings.authorName,
 				() => getDocxEditorLocale(this.settings.editorLanguage),
+				() => this.settings.showRuler,
+				() => this.settings.autosave,
 			),
 		);
 		this.registerExtensions(DOCX_EXTENSIONS, VIEW_TYPE_DOCX);

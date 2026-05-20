@@ -89,6 +89,8 @@ export class DocxView extends FileView {
 		leaf: WorkspaceLeaf,
 		private getAuthorName: () => string,
 		private getEditorLocale: () => Translations | undefined,
+		private getShowRuler: () => boolean,
+		private getAutosave: () => boolean,
 	) {
 		super(leaf);
 	}
@@ -204,6 +206,36 @@ export class DocxView extends FileView {
 		this.buffer = buffer.slice(0);
 		this.isDirty = false;
 		this.render();
+	}
+
+	private async renameFile(name: string) {
+		const file = this.file;
+		if (!file) {
+			throw new Error('No docx file is open.');
+		}
+
+		const normalizedName = this.normalizeDocxFileName(name);
+		if (!normalizedName) {
+			throw new Error('Document name cannot be empty.');
+		}
+
+		if (normalizedName === file.name) {
+			return;
+		}
+
+		const folderPath = file.parent?.path;
+		const newPath = folderPath && folderPath !== '/' ? `${folderPath}/${normalizedName}` : normalizedName;
+		await this.app.fileManager.renameFile(file, newPath);
+		new Notice(`Renamed to ${normalizedName}`);
+	}
+
+	private normalizeDocxFileName(name: string) {
+		const trimmedName = name.trim().replace(/[\\/]/g, '-');
+		if (!trimmedName || trimmedName === '.docx') {
+			return null;
+		}
+
+		return trimmedName.toLowerCase().endsWith('.docx') ? trimmedName : `${trimmedName}.docx`;
 	}
 
 	private async promptToSaveIfDirty() {
@@ -365,10 +397,13 @@ export class DocxView extends FileView {
 				isLoading={this.isLoading}
 				authorName={this.getAuthorName()}
 				i18n={this.getEditorLocale()}
+				showRuler={this.getShowRuler()}
+				autosave={this.getAutosave()}
 				onDirtyChange={(isDirty) => {
 					this.isDirty = isDirty;
 				}}
 				onSave={(buffer) => this.saveFile(buffer)}
+				onDocumentNameChange={(name) => this.renameFile(name)}
 			/>,
 		);
 	}

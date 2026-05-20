@@ -1,5 +1,5 @@
 import { Notice, TFile, setIcon } from 'obsidian';
-import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef } from 'react';
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { DocxEditor, DocxEditorRef } from '@eigenpal/docx-editor-react';
 import type { Translations } from '@eigenpal/docx-editor-i18n';
 import editorStyles from '@eigenpal/docx-editor-react/styles.css';
@@ -55,8 +55,11 @@ export interface DocxReactViewProps {
 	isLoading: boolean;
 	authorName: string;
 	i18n: Translations | undefined;
+	showRuler: boolean;
+	autosave: boolean;
 	onDirtyChange: (isDirty: boolean) => void;
 	onSave: (buffer: ArrayBuffer) => Promise<void>;
+	onDocumentNameChange: (name: string) => Promise<void>;
 }
 
 export interface DocxReactViewHandle {
@@ -64,12 +67,15 @@ export interface DocxReactViewHandle {
 }
 
 export const DocxReactView = forwardRef<DocxReactViewHandle, DocxReactViewProps>(function DocxReactView(
-	{ file, buffer, error, isLoading, authorName, i18n, onDirtyChange, onSave },
+	{ file, buffer, error, isLoading, authorName, i18n, showRuler, autosave, onDirtyChange, onSave, onDocumentNameChange },
 	ref,
 ) {
 	const editorRef = useRef<DocxEditorRef>(null);
 	const dirtyTrackingEnabledRef = useRef(false);
 	const isSavingRef = useRef(false);
+	const autosaveTimeoutRef = useRef<number | null>(null);
+	const renameTimeoutRef = useRef<number | null>(null);
+	const [documentName, setDocumentName] = useState(file?.name ?? '');
 
 	useEffect(() => {
 		ensureEditorStyles();
@@ -87,7 +93,30 @@ export const DocxReactView = forwardRef<DocxReactViewHandle, DocxReactViewProps>
 		};
 	}, [file, buffer]);
 
-	const persistDocument = useCallback(async (output: ArrayBuffer) => {
+	useEffect(() => {
+		setDocumentName(file?.name ?? '');
+	}, [file]);
+
+	const clearAutosaveTimeout = useCallback(() => {
+		if (autosaveTimeoutRef.current !== null) {
+			window.clearTimeout(autosaveTimeoutRef.current);
+			autosaveTimeoutRef.current = null;
+		}
+	}, []);
+
+	const clearRenameTimeout = useCallback(() => {
+		if (renameTimeoutRef.current !== null) {
+			window.clearTimeout(renameTimeoutRef.current);
+			renameTimeoutRef.current = null;
+		}
+	}, []);
+
+	useEffect(() => () => {
+		clearAutosaveTimeout();
+		clearRenameTimeout();
+	}, [clearAutosaveTimeout, clearRenameTimeout]);
+
+	const persistDocument = useCallback(async (output: ArrayBuffer, options?: { silent?: boolean }) => {
 		if (!file) {
 			return false;
 		}
@@ -99,7 +128,10 @@ export const DocxReactView = forwardRef<DocxReactViewHandle, DocxReactViewProps>
 
 		try {
 			await onSave(output);
-			new Notice(`Saved ${file.name}`);
+			onDirtyChange(false);
+			if (!options?.silent) {
+				new Notice(`Saved ${file.name}`);
+			}
 			return true;
 		} catch (saveError) {
 			const message = saveError instanceof Error ? saveError.message : 'Unknown save error';
@@ -110,9 +142,11 @@ export const DocxReactView = forwardRef<DocxReactViewHandle, DocxReactViewProps>
 				isSavingRef.current = false;
 			}, 300);
 		}
-	}, [file, onSave]);
+	}, [file, onDirtyChange, onSave]);
 
-	const saveDocument = useCallback(async () => {
+	const saveDocument = useCallback(async (options?: { silent?: boolean }) => {
+		clearAutosaveTimeout();
+
 		if (!file) {
 			new Notice('No docx file is open.');
 			return false;
@@ -124,11 +158,44 @@ export const DocxReactView = forwardRef<DocxReactViewHandle, DocxReactViewProps>
 			return false;
 		}
 
-		return persistDocument(output);
-	}, [file, persistDocument]);
+		return persistDocument(output, options);
+	}, [clearAutosaveTimeout, file, persistDocument]);
+
+	useEffect(() => {
+		if (!autosave) {
+			clearAutosaveTimeout();
+		}
+	}, [autosave, clearAutosaveTimeout]);
+
+	const scheduleAutosave = useCallback(() => {
+		if (!autosave) {
+			clearAutosaveTimeout();
+			return;
+		}
+
+		clearAutosaveTimeout();
+		autosaveTimeoutRef.current = window.setTimeout(() => {
+			autosaveTimeoutRef.current = null;
+			void saveDocument({ silent: true });
+		}, 1500);
+	}, [autosave, clearAutosaveTimeout, saveDocument]);
+
+	const scheduleRename = useCallback((name: string) => {
+		clearRenameTimeout();
+		renameTimeoutRef.current = window.setTimeout(async () => {
+			renameTimeoutRef.current = null;
+			try {
+				await onDocumentNameChange(name);
+			} catch (renameError) {
+				const message = renameError instanceof Error ? renameError.message : 'Unknown rename error';
+				new Notice(`Could not rename ${file?.name ?? 'document'}: ${message}`);
+				setDocumentName(file?.name ?? '');
+			}
+		}, 700);
+	}, [clearRenameTimeout, file, onDocumentNameChange]);
 
 	useImperativeHandle(ref, () => ({
-		save: saveDocument,
+		save: () => saveDocument(),
 	}), [saveDocument]);
 
 	if (isLoading) {
@@ -151,14 +218,20 @@ export const DocxReactView = forwardRef<DocxReactViewHandle, DocxReactViewProps>
 			mode="editing"
 			author={authorName}
 			i18n={i18n}
-			documentName={file.basename}
-			documentNameEditable={false}
+			showRuler={showRuler}
+			documentName={documentName}
+			documentNameEditable
+			onDocumentNameChange={(name) => {
+				setDocumentName(name);
+				scheduleRename(name);
+			}}
 			renderLogo={() => (
 				<SaveButton onClick={() => void saveDocument()} />
 			)}
 			onChange={() => {
 				if (dirtyTrackingEnabledRef.current) {
 					onDirtyChange(true);
+					scheduleAutosave();
 				}
 			}}
 			onSave={(output) => {
