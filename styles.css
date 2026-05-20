@@ -63,6 +63,17 @@
 	background-color: var(--doc-primary-light);
 }
 
+.docxidian-host .ep-root .docxidian-find-match {
+	background-color: rgba(250, 204, 21, 0.45);
+	border-radius: 2px;
+}
+
+.docxidian-host .ep-root .docxidian-find-current {
+	background-color: rgba(249, 115, 22, 0.58);
+	border-radius: 2px;
+	outline: 1px solid rgba(234, 88, 12, 0.85);
+}
+
 .docxidian-host .ep-root .docx-text-context-menu {
 	transform: translate(
 		calc(-1 * var(--docxidian-fixed-left-offset, 0px)),

@@ -4,6 +4,7 @@ import { Root, createRoot } from 'react-dom/client';
 import type { Translations } from '@eigenpal/docx-editor-i18n';
 import { DocxReactView, DocxReactViewHandle } from './DocxReactView';
 import { hasReviewMarkup } from './docxReviewMarkup';
+import type { DocxidianLanguage } from './locales';
 
 export const VIEW_TYPE_DOCX = 'docxidian-docx-view';
 
@@ -91,6 +92,7 @@ export class DocxView extends FileView {
 	constructor(
 		leaf: WorkspaceLeaf,
 		private getAuthorName: () => string,
+		private getEditorLanguage: () => DocxidianLanguage,
 		private getEditorLocale: () => Translations | undefined,
 		private getShowRuler: () => boolean,
 		private getAutosave: () => boolean,
@@ -201,6 +203,24 @@ export class DocxView extends FileView {
 		}
 
 		return saved;
+	}
+
+	openFindDialog() {
+		if (!this.file || this.isLoading) {
+			new Notice('Open a loaded docx file to search it.');
+			return;
+		}
+
+		this.reactViewRef.current?.openFind();
+	}
+
+	openFindReplaceDialog() {
+		if (!this.file || this.isLoading) {
+			new Notice('Open a loaded docx file to search it.');
+			return;
+		}
+
+		this.reactViewRef.current?.openFindReplace();
 	}
 
 	refreshSettings() {
@@ -448,6 +468,7 @@ export class DocxView extends FileView {
 				error={this.error}
 				isLoading={this.isLoading}
 				authorName={this.getAuthorName()}
+				editorLanguage={this.getEditorLanguage()}
 				i18n={this.getEditorLocale()}
 				showRuler={this.getShowRuler()}
 				autosave={this.getAutosave()}

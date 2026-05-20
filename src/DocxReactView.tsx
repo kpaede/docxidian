@@ -2,7 +2,10 @@ import { Notice, TFile, setIcon } from 'obsidian';
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState, type ComponentProps } from 'react';
 import { DocxEditor, type DocxEditorRef, type EditorMode } from '@eigenpal/docx-editor-react';
 import type { Translations } from '@eigenpal/docx-editor-i18n';
+import { Plugin, PluginKey, TextSelection } from 'prosemirror-state';
+import { Decoration, DecorationSet } from 'prosemirror-view';
 import editorStyles from '@eigenpal/docx-editor-react/styles.css';
+import type { DocxidianLanguage } from './locales';
 
 let stylesInjected = false;
 let editorInstanceCounter = 0;
@@ -27,6 +30,157 @@ interface DocxDocumentWithSectionProperties {
 const DEFAULT_PAGE_HEIGHT_TWIPS = 15840;
 const DEFAULT_MARGIN_TWIPS = 1440;
 
+type FindReplaceMode = 'find' | 'replace';
+
+interface FindMatch {
+	from: number;
+	to: number;
+	text: string;
+}
+
+interface RefreshFindOptions {
+	select?: boolean;
+}
+
+interface FindHighlightState {
+	matches: FindMatch[];
+	currentIndex: number;
+}
+
+interface FindReplaceLabels {
+	find: string;
+	findAndReplace: string;
+	findText: string;
+	replaceWith: string;
+	replace: string;
+	replaceAll: string;
+	matchCase: string;
+	wholeWords: string;
+	showReplace: string;
+	close: string;
+	previous: string;
+	next: string;
+	noMatches: string;
+	resultCount: (current: number, total: number) => string;
+}
+
+const FIND_REPLACE_LABELS: Record<DocxidianLanguage, FindReplaceLabels> = {
+	en: {
+		find: 'Find',
+		findAndReplace: 'Find and Replace',
+		findText: 'Find text',
+		replaceWith: 'Replace with',
+		replace: 'Replace',
+		replaceAll: 'Replace all',
+		matchCase: 'Match case',
+		wholeWords: 'Whole words',
+		showReplace: 'Show replace',
+		close: 'Close',
+		previous: 'Previous match',
+		next: 'Next match',
+		noMatches: 'No matches',
+		resultCount: (current, total) => `${current} of ${total}`,
+	},
+	de: {
+		find: 'Suchen',
+		findAndReplace: 'Suchen und Ersetzen',
+		findText: 'Suchtext',
+		replaceWith: 'Ersetzen durch',
+		replace: 'Ersetzen',
+		replaceAll: 'Alle ersetzen',
+		matchCase: 'Groß/Klein',
+		wholeWords: 'Ganze Wörter',
+		showReplace: 'Ersetzen anzeigen',
+		close: 'Schließen',
+		previous: 'Vorheriger Treffer',
+		next: 'Nächster Treffer',
+		noMatches: 'Keine Treffer',
+		resultCount: (current, total) => `${current} von ${total}`,
+	},
+	pl: {
+		find: 'Znajdź',
+		findAndReplace: 'Znajdź i zamień',
+		findText: 'Szukany tekst',
+		replaceWith: 'Zamień na',
+		replace: 'Zamień',
+		replaceAll: 'Zamień wszystko',
+		matchCase: 'Uwzględnij wielkość liter',
+		wholeWords: 'Całe wyrazy',
+		showReplace: 'Pokaż zamianę',
+		close: 'Zamknij',
+		previous: 'Poprzednie trafienie',
+		next: 'Następne trafienie',
+		noMatches: 'Brak trafień',
+		resultCount: (current, total) => `${current} z ${total}`,
+	},
+	'pt-BR': {
+		find: 'Localizar',
+		findAndReplace: 'Localizar e substituir',
+		findText: 'Texto para localizar',
+		replaceWith: 'Substituir por',
+		replace: 'Substituir',
+		replaceAll: 'Substituir tudo',
+		matchCase: 'Diferenciar maiúsculas',
+		wholeWords: 'Palavras inteiras',
+		showReplace: 'Mostrar substituir',
+		close: 'Fechar',
+		previous: 'Resultado anterior',
+		next: 'Próximo resultado',
+		noMatches: 'Nenhum resultado',
+		resultCount: (current, total) => `${current} de ${total}`,
+	},
+	tr: {
+		find: 'Bul',
+		findAndReplace: 'Bul ve değiştir',
+		findText: 'Aranacak metin',
+		replaceWith: 'Şununla değiştir',
+		replace: 'Değiştir',
+		replaceAll: 'Tümünü değiştir',
+		matchCase: 'Büyük/küçük harf',
+		wholeWords: 'Tam sözcükler',
+		showReplace: 'Değiştirmeyi göster',
+		close: 'Kapat',
+		previous: 'Önceki eşleşme',
+		next: 'Sonraki eşleşme',
+		noMatches: 'Eşleşme yok',
+		resultCount: (current, total) => `${current} / ${total}`,
+	},
+	he: {
+		find: 'חיפוש',
+		findAndReplace: 'חיפוש והחלפה',
+		findText: 'טקסט לחיפוש',
+		replaceWith: 'החלפה ב',
+		replace: 'החלף',
+		replaceAll: 'החלף הכל',
+		matchCase: 'התאם אותיות גדולות/קטנות',
+		wholeWords: 'מילים שלמות',
+		showReplace: 'הצג החלפה',
+		close: 'סגור',
+		previous: 'התוצאה הקודמת',
+		next: 'התוצאה הבאה',
+		noMatches: 'אין תוצאות',
+		resultCount: (current, total) => `${current} מתוך ${total}`,
+	},
+	'zh-CN': {
+		find: '查找',
+		findAndReplace: '查找和替换',
+		findText: '查找文本',
+		replaceWith: '替换为',
+		replace: '替换',
+		replaceAll: '全部替换',
+		matchCase: '区分大小写',
+		wholeWords: '全字匹配',
+		showReplace: '显示替换',
+		close: '关闭',
+		previous: '上一个匹配项',
+		next: '下一个匹配项',
+		noMatches: '无匹配项',
+		resultCount: (current, total) => `${current} / ${total}`,
+	},
+};
+
+const findHighlightPluginKey = new PluginKey<FindHighlightState>('docxidian-find-highlight');
+
 function getEditorModeFromButton(button: HTMLButtonElement): EditorMode | null {
 	const label = button.textContent?.replace(/\s+/g, ' ').trim().toLowerCase() ?? '';
 
@@ -41,6 +195,53 @@ function getEditorModeFromButton(button: HTMLButtonElement): EditorMode | null {
 	}
 
 	return null;
+}
+
+function escapeRegExp(value: string) {
+	return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function createFindPattern(searchText: string, matchCase: boolean, wholeWord: boolean) {
+	if (!searchText.trim()) {
+		return null;
+	}
+
+	const source = wholeWord ? `\\b${escapeRegExp(searchText)}\\b` : escapeRegExp(searchText);
+	return new RegExp(source, matchCase ? 'g' : 'gi');
+}
+
+function findMatchesInView(editor: DocxEditorRef | null, searchText: string, matchCase: boolean, wholeWord: boolean) {
+	const view = editor?.getEditorRef()?.getView();
+	const pattern = createFindPattern(searchText, matchCase, wholeWord);
+	const matches: FindMatch[] = [];
+
+	if (!view || !pattern) {
+		return matches;
+	}
+
+	view.state.doc.descendants((node, pos) => {
+		if (!node.isTextblock) {
+			return true;
+		}
+
+		const text = node.textContent;
+		for (const match of text.matchAll(pattern)) {
+			const index = match.index ?? -1;
+			if (index < 0) {
+				continue;
+			}
+
+			matches.push({
+				from: pos + 1 + index,
+				to: pos + 1 + index + match[0].length,
+				text: match[0],
+			});
+		}
+
+		return false;
+	});
+
+	return matches;
 }
 
 export function ensureEditorStyles() {
@@ -85,12 +286,162 @@ const SaveButton = ({ onClick }: { onClick: () => void }) => {
 	);
 };
 
+const IconButton = ({ icon, label, onClick }: { icon: string; label: string; onClick: () => void }) => {
+	const ref = useRef<HTMLButtonElement>(null);
+	useEffect(() => {
+		if (ref.current) {
+			ref.current.innerHTML = '';
+			setIcon(ref.current, icon);
+		}
+	}, [icon]);
+
+	return (
+		<button
+			ref={ref}
+			type="button"
+			aria-label={label}
+			title={label}
+			onClick={onClick}
+			style={{
+				alignItems: 'center',
+				background: 'transparent',
+				border: 'none',
+				borderRadius: '4px',
+				boxShadow: 'none',
+				color: 'inherit',
+				cursor: 'pointer',
+				display: 'inline-flex',
+				height: '28px',
+				justifyContent: 'center',
+				padding: '4px 6px',
+				width: '30px',
+			}}
+		/>
+	);
+};
+
+interface FindReplaceDialogProps {
+	isOpen: boolean;
+	labels: FindReplaceLabels;
+	mode: FindReplaceMode;
+	searchText: string;
+	replaceText: string;
+	matchCase: boolean;
+	wholeWord: boolean;
+	matchCount: number;
+	currentIndex: number;
+	onSearchTextChange: (value: string) => void;
+	onReplaceTextChange: (value: string) => void;
+	onMatchCaseChange: (value: boolean) => void;
+	onWholeWordChange: (value: boolean) => void;
+	onModeChange: (mode: FindReplaceMode) => void;
+	onNext: () => void;
+	onPrevious: () => void;
+	onReplace: () => void;
+	onReplaceAll: () => void;
+	onClose: () => void;
+}
+
+const FindReplaceDialog = ({
+	isOpen,
+	labels,
+	mode,
+	searchText,
+	replaceText,
+	matchCase,
+	wholeWord,
+	matchCount,
+	currentIndex,
+	onSearchTextChange,
+	onReplaceTextChange,
+	onMatchCaseChange,
+	onWholeWordChange,
+	onModeChange,
+	onNext,
+	onPrevious,
+	onReplace,
+	onReplaceAll,
+	onClose,
+}: FindReplaceDialogProps) => {
+	if (!isOpen) {
+		return null;
+	}
+
+	const resultText = searchText.trim()
+		? (matchCount > 0 ? labels.resultCount(currentIndex + 1, matchCount) : labels.noMatches)
+		: '';
+
+	return (
+		<div
+			className="docxidian-find-dialog"
+			style={{
+				position: 'fixed',
+				right: '24px',
+				top: '92px',
+				zIndex: 100050,
+				width: '360px',
+				background: 'white',
+				border: '1px solid var(--background-modifier-border, #d1d5db)',
+				borderRadius: '8px',
+				boxShadow: '0 10px 30px rgba(0, 0, 0, 0.18)',
+				padding: '12px',
+				color: 'var(--text-normal, #202124)',
+			}}
+		>
+			<div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+				<strong>{mode === 'replace' ? labels.findAndReplace : labels.find}</strong>
+				<button type="button" aria-label={labels.close} onClick={onClose} style={{ border: 'none', background: 'transparent', cursor: 'pointer' }}>×</button>
+			</div>
+			<div style={{ display: 'flex', gap: '6px', marginBottom: '8px' }}>
+				<input
+					value={searchText}
+					onChange={(evt) => onSearchTextChange(evt.currentTarget.value)}
+					placeholder={labels.findText}
+					autoFocus
+					style={{ flex: 1, height: '30px' }}
+					onKeyDown={(evt) => {
+						if (evt.key === 'Enter') {
+							evt.preventDefault();
+							evt.shiftKey ? onPrevious() : onNext();
+						}
+					}}
+				/>
+				<button type="button" aria-label={labels.previous} title={labels.previous} onClick={onPrevious} disabled={matchCount === 0}>↑</button>
+				<button type="button" aria-label={labels.next} title={labels.next} onClick={onNext} disabled={matchCount === 0}>↓</button>
+			</div>
+			{mode === 'replace' && (
+				<div style={{ display: 'flex', gap: '6px', marginBottom: '8px' }}>
+					<input
+						value={replaceText}
+						onChange={(evt) => onReplaceTextChange(evt.currentTarget.value)}
+						placeholder={labels.replaceWith}
+						style={{ flex: 1, height: '30px' }}
+					/>
+					<button type="button" onClick={onReplace} disabled={matchCount === 0}>{labels.replace}</button>
+					<button type="button" onClick={onReplaceAll} disabled={matchCount === 0}>{labels.replaceAll}</button>
+				</div>
+			)}
+			<div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+				<div style={{ display: 'flex', gap: '10px', fontSize: '12px' }}>
+					<label><input type="checkbox" checked={matchCase} onChange={(evt) => onMatchCaseChange(evt.currentTarget.checked)} /> {labels.matchCase}</label>
+					<label><input type="checkbox" checked={wholeWord} onChange={(evt) => onWholeWordChange(evt.currentTarget.checked)} /> {labels.wholeWords}</label>
+				</div>
+				<div style={{ fontSize: '12px', color: 'var(--text-muted, #6b7280)', whiteSpace: 'nowrap' }}>{resultText}</div>
+			</div>
+			{mode === 'find' && (
+				<button type="button" onClick={() => onModeChange('replace')} style={{ marginTop: '10px' }}>{labels.showReplace}</button>
+			)}
+		</div>
+	);
+};
+
 export interface DocxReactViewProps {
 	file: TFile | null;
 	buffer: ArrayBuffer | null;
 	error: string | null;
 	isLoading: boolean;
 	authorName: string;
+	editorLanguage: DocxidianLanguage;
 	i18n: Translations | undefined;
 	showRuler: boolean;
 	autosave: boolean;
@@ -102,10 +453,12 @@ export interface DocxReactViewProps {
 
 export interface DocxReactViewHandle {
 	save: () => Promise<boolean>;
+	openFind: () => void;
+	openFindReplace: () => void;
 }
 
 export const DocxReactView = forwardRef<DocxReactViewHandle, DocxReactViewProps>(function DocxReactView(
-	{ file, buffer, error, isLoading, authorName, i18n, showRuler, autosave, reserveReviewSidebar, onDirtyChange, onSave, onDocumentNameChange },
+	{ file, buffer, error, isLoading, authorName, editorLanguage, i18n, showRuler, autosave, reserveReviewSidebar, onDirtyChange, onSave, onDocumentNameChange },
 	ref,
 ) {
 	const editorRef = useRef<DocxEditorRef>(null);
@@ -120,7 +473,40 @@ export const DocxReactView = forwardRef<DocxReactViewHandle, DocxReactViewProps>
 	const pendingSavePromiseRef = useRef<Promise<boolean> | null>(null);
 	const [documentName, setDocumentName] = useState(file?.name ?? '');
 	const [editorMode, setEditorMode] = useState<EditorMode>('editing');
+	const [findDialogMode, setFindDialogMode] = useState<FindReplaceMode | null>(null);
+	const [findSearchText, setFindSearchText] = useState('');
+	const [findReplaceText, setFindReplaceText] = useState('');
+	const [findMatchCase, setFindMatchCase] = useState(false);
+	const [findWholeWord, setFindWholeWord] = useState(false);
+	const [findMatches, setFindMatches] = useState<FindMatch[]>([]);
+	const [currentFindIndex, setCurrentFindIndex] = useState(0);
 	const filePath = file?.path ?? null;
+	const findReplaceLabels = FIND_REPLACE_LABELS[editorLanguage] ?? FIND_REPLACE_LABELS.en;
+	const findHighlightPlugin = useMemo(() => new Plugin<FindHighlightState>({
+		key: findHighlightPluginKey,
+		state: {
+			init: () => ({ matches: [], currentIndex: 0 }),
+			apply: (transaction, previous) => transaction.getMeta(findHighlightPluginKey) ?? previous,
+		},
+		props: {
+			decorations: (state) => {
+				const pluginState = findHighlightPluginKey.getState(state);
+				if (!pluginState || pluginState.matches.length === 0) {
+					return DecorationSet.empty;
+				}
+
+				return DecorationSet.create(
+					state.doc,
+					pluginState.matches.map((match, index) => Decoration.inline(
+						match.from,
+						match.to,
+						{ class: index === pluginState.currentIndex ? 'docxidian-find-current' : 'docxidian-find-match' },
+					)),
+				);
+			},
+		},
+	}), []);
+	const externalPlugins = useMemo(() => [findHighlightPlugin], [findHighlightPlugin]);
 	const pluginSidebarItems = useMemo<NonNullable<ComponentProps<typeof DocxEditor>['pluginSidebarItems']>>(() => {
 		if (!reserveReviewSidebar) {
 			return [];
@@ -154,11 +540,129 @@ export const DocxReactView = forwardRef<DocxReactViewHandle, DocxReactViewProps>
 	useEffect(() => {
 		setDocumentName(file?.name ?? '');
 		setEditorMode('editing');
+		setFindDialogMode(null);
+		setFindSearchText('');
+		setFindReplaceText('');
+		setFindMatches([]);
+		setCurrentFindIndex(0);
 	}, [filePath]);
 
 	const setMode = useCallback((mode: EditorMode) => {
 		setEditorMode(mode);
 	}, []);
+
+	const publishFindHighlights = useCallback((matches: FindMatch[], currentIndex: number) => {
+		const view = editorRef.current?.getEditorRef()?.getView();
+		if (!view) {
+			return;
+		}
+
+		view.dispatch(view.state.tr.setMeta(findHighlightPluginKey, { matches, currentIndex }));
+	}, []);
+
+	const selectFindMatch = useCallback((matches: FindMatch[], index: number) => {
+		const view = editorRef.current?.getEditorRef()?.getView();
+		const match = matches[index];
+		if (!view || !match) {
+			return;
+		}
+
+		view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, match.from, match.to)).scrollIntoView());
+		editorRef.current?.scrollToPosition(match.from);
+	}, []);
+
+	const refreshFindMatches = useCallback((searchText: string, matchCase = findMatchCase, wholeWord = findWholeWord, preferredIndex = 0, options: RefreshFindOptions = {}) => {
+		const matches = findMatchesInView(editorRef.current, searchText, matchCase, wholeWord);
+		const nextIndex = matches.length > 0 ? Math.max(0, Math.min(preferredIndex, matches.length - 1)) : 0;
+
+		setFindMatches(matches);
+		setCurrentFindIndex(nextIndex);
+		publishFindHighlights(matches, nextIndex);
+		if (options.select && matches.length > 0) {
+			selectFindMatch(matches, nextIndex);
+		}
+
+		return matches;
+	}, [findMatchCase, findWholeWord, publishFindHighlights, selectFindMatch]);
+
+	const openFindReplacePanel = useCallback((mode: FindReplaceMode) => {
+		const selectedText = editorRef.current?.getSelectionInfo()?.selectedText?.trim();
+		const nextSearchText = selectedText || findSearchText;
+
+		setFindDialogMode(mode);
+		if (selectedText) {
+			setFindSearchText(selectedText);
+		}
+		refreshFindMatches(nextSearchText);
+	}, [findSearchText, refreshFindMatches]);
+
+	const openFindReplaceDialog = useCallback((mode: FindReplaceMode) => {
+		openFindReplacePanel(mode);
+	}, [openFindReplacePanel]);
+
+	useEffect(() => {
+		const handleFindShortcut = (evt: KeyboardEvent) => {
+			const editorRoot = document.querySelector<HTMLElement>(`.${editorClassNameRef.current}`);
+			const isModifierPressed = evt.metaKey || evt.ctrlKey;
+			if (
+				!editorRoot
+				|| !isModifierPressed
+				|| evt.altKey
+				|| evt.shiftKey
+				|| !(evt.target instanceof Node)
+				|| (!editorRoot.contains(evt.target) && !document.querySelector('.docxidian-find-dialog')?.contains(evt.target))
+			) {
+				return;
+			}
+
+			if (evt.key.toLowerCase() === 'f' || evt.key.toLowerCase() === 'h') {
+				evt.preventDefault();
+				evt.stopPropagation();
+				openFindReplaceDialog(evt.key.toLowerCase() === 'f' ? 'find' : 'replace');
+			}
+		};
+
+		document.addEventListener('keydown', handleFindShortcut, true);
+		return () => document.removeEventListener('keydown', handleFindShortcut, true);
+	}, [openFindReplaceDialog]);
+
+	const moveFindMatch = useCallback((direction: 1 | -1) => {
+		if (findMatches.length === 0) {
+			return;
+		}
+
+		const nextIndex = (currentFindIndex + direction + findMatches.length) % findMatches.length;
+		setCurrentFindIndex(nextIndex);
+		publishFindHighlights(findMatches, nextIndex);
+		selectFindMatch(findMatches, nextIndex);
+	}, [currentFindIndex, findMatches, publishFindHighlights, selectFindMatch]);
+
+	const replaceCurrentMatch = useCallback(() => {
+		const view = editorRef.current?.getEditorRef()?.getView();
+		const match = findMatches[currentFindIndex];
+		if (!view || !match) {
+			return;
+		}
+
+		const textNode = findReplaceText ? view.state.schema.text(findReplaceText) : null;
+		view.dispatch(view.state.tr.replaceWith(match.from, match.to, textNode ? [textNode] : []).scrollIntoView());
+		refreshFindMatches(findSearchText, findMatchCase, findWholeWord, currentFindIndex);
+	}, [currentFindIndex, findMatchCase, findMatches, findReplaceText, findSearchText, findWholeWord, refreshFindMatches]);
+
+	const replaceAllMatches = useCallback(() => {
+		const view = editorRef.current?.getEditorRef()?.getView();
+		if (!view || findMatches.length === 0) {
+			return;
+		}
+
+		let transaction = view.state.tr;
+		for (const match of [...findMatches].sort((a, b) => b.from - a.from)) {
+			const textNode = findReplaceText ? view.state.schema.text(findReplaceText) : null;
+			transaction = transaction.replaceWith(match.from, match.to, textNode ? [textNode] : []);
+		}
+		view.dispatch(transaction.scrollIntoView());
+		refreshFindMatches(findSearchText, findMatchCase, findWholeWord, 0);
+	}, [findMatchCase, findMatches, findReplaceText, findSearchText, findWholeWord, refreshFindMatches]);
 
 	const normalizeEditorModeDropdown = useCallback(() => {
 		const editorRoot = document.querySelector<HTMLElement>(`.${editorClassNameRef.current}`);
@@ -446,7 +950,9 @@ export const DocxReactView = forwardRef<DocxReactViewHandle, DocxReactViewProps>
 
 	useImperativeHandle(ref, () => ({
 		save: () => saveDocument(),
-	}), [saveDocument]);
+		openFind: () => openFindReplaceDialog('find'),
+		openFindReplace: () => openFindReplaceDialog('replace'),
+	}), [openFindReplaceDialog, saveDocument]);
 
 	if (isLoading) {
 		return null;
@@ -461,41 +967,85 @@ export const DocxReactView = forwardRef<DocxReactViewHandle, DocxReactViewProps>
 	}
 
 	return (
-		<DocxEditor
-			key={`${file.path}-${file.stat.mtime}`}
-			ref={editorRef}
-			documentBuffer={buffer}
-			mode={editorMode}
-			onModeChange={setMode}
-			author={authorName}
-			i18n={i18n}
-			className={editorClassNameRef.current}
-			showRuler={showRuler}
-			documentName={documentName}
-			documentNameEditable
-			pluginSidebarItems={pluginSidebarItems.length > 0 ? pluginSidebarItems : undefined}
-			onDocumentNameChange={(name) => {
-				setDocumentName(name);
-				scheduleRename(name);
-			}}
-			renderLogo={() => (
-				<SaveButton onClick={() => void saveDocument()} />
-			)}
-			onChange={() => {
-				if (dirtyTrackingEnabledRef.current) {
-					onDirtyChange(true);
-					scheduleAutosave();
-				}
-				scheduleVerticalRulerMarkerSync(editorRef.current?.getDocument());
-			}}
-			onSave={(output) => {
-				const savePromise = persistDocument(output, pendingSaveOptionsRef.current);
-				pendingSavePromiseRef.current = savePromise;
-				void savePromise;
-			}}
-			onError={(docxError) => {
-				new Notice(`Could not render ${file.name}: ${docxError.message}`);
-			}}
-		/>
+		<>
+			<DocxEditor
+				key={`${file.path}-${file.stat.mtime}`}
+				ref={editorRef}
+				documentBuffer={buffer}
+				mode={editorMode}
+				onModeChange={setMode}
+				author={authorName}
+				i18n={i18n}
+				className={editorClassNameRef.current}
+				showRuler={showRuler}
+				disableFindReplaceShortcuts
+				externalPlugins={externalPlugins}
+				documentName={documentName}
+				documentNameEditable
+				pluginSidebarItems={pluginSidebarItems.length > 0 ? pluginSidebarItems : undefined}
+				toolbarExtra={(
+					<>
+						<IconButton icon="search" label={findReplaceLabels.find} onClick={() => openFindReplaceDialog('find')} />
+						<IconButton icon="replace" label={findReplaceLabels.findAndReplace} onClick={() => openFindReplaceDialog('replace')} />
+					</>
+				)}
+				onDocumentNameChange={(name) => {
+					setDocumentName(name);
+					scheduleRename(name);
+				}}
+				renderLogo={() => (
+					<SaveButton onClick={() => void saveDocument()} />
+				)}
+				onChange={() => {
+					if (dirtyTrackingEnabledRef.current) {
+						onDirtyChange(true);
+						scheduleAutosave();
+					}
+					scheduleVerticalRulerMarkerSync(editorRef.current?.getDocument());
+				}}
+				onSave={(output) => {
+					const savePromise = persistDocument(output, pendingSaveOptionsRef.current);
+					pendingSavePromiseRef.current = savePromise;
+					void savePromise;
+				}}
+				onError={(docxError) => {
+					new Notice(`Could not render ${file.name}: ${docxError.message}`);
+				}}
+			/>
+			<FindReplaceDialog
+				isOpen={findDialogMode !== null}
+				labels={findReplaceLabels}
+				mode={findDialogMode ?? 'find'}
+				searchText={findSearchText}
+				replaceText={findReplaceText}
+				matchCase={findMatchCase}
+				wholeWord={findWholeWord}
+				matchCount={findMatches.length}
+				currentIndex={currentFindIndex}
+				onSearchTextChange={(value) => {
+					setFindSearchText(value);
+					refreshFindMatches(value, findMatchCase, findWholeWord, 0);
+				}}
+				onReplaceTextChange={setFindReplaceText}
+				onMatchCaseChange={(value) => {
+					setFindMatchCase(value);
+					refreshFindMatches(findSearchText, value, findWholeWord, currentFindIndex);
+				}}
+				onWholeWordChange={(value) => {
+					setFindWholeWord(value);
+					refreshFindMatches(findSearchText, findMatchCase, value, currentFindIndex);
+				}}
+				onModeChange={setFindDialogMode}
+				onNext={() => moveFindMatch(1)}
+				onPrevious={() => moveFindMatch(-1)}
+				onReplace={replaceCurrentMatch}
+				onReplaceAll={replaceAllMatches}
+				onClose={() => {
+					setFindDialogMode(null);
+					setFindMatches([]);
+					publishFindHighlights([], 0);
+				}}
+			/>
+		</>
 	);
 });

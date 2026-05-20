@@ -17,6 +17,7 @@ export default class DocxidianPlugin extends Plugin {
 			(leaf) => new DocxView(
 				leaf,
 				() => this.settings.authorName,
+				() => this.settings.editorLanguage,
 				() => getDocxEditorLocale(this.settings.editorLanguage),
 				() => this.settings.showRuler,
 				() => this.settings.autosave,
@@ -39,6 +40,32 @@ export default class DocxidianPlugin extends Plugin {
 				}
 
 				await docxView.saveCurrentDocument();
+			},
+		});
+		this.addCommand({
+			id: 'find-in-current-docx',
+			name: 'Find in current docx',
+			callback: () => {
+				const docxView = this.app.workspace.getActiveViewOfType(DocxView);
+				if (!docxView) {
+					new Notice('Open a docx file to search it.');
+					return;
+				}
+
+				docxView.openFindDialog();
+			},
+		});
+		this.addCommand({
+			id: 'find-replace-in-current-docx',
+			name: 'Find and replace in current docx',
+			callback: () => {
+				const docxView = this.app.workspace.getActiveViewOfType(DocxView);
+				if (!docxView) {
+					new Notice('Open a docx file to search it.');
+					return;
+				}
+
+				docxView.openFindReplaceDialog();
 			},
 		});
 
