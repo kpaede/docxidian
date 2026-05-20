@@ -1,5 +1,5 @@
 import { Notice, TFile, setIcon } from 'obsidian';
-import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState, type ComponentProps } from 'react';
 import { DocxEditor, DocxEditorRef } from '@eigenpal/docx-editor-react';
 import type { Translations } from '@eigenpal/docx-editor-i18n';
 import editorStyles from '@eigenpal/docx-editor-react/styles.css';
@@ -57,6 +57,7 @@ export interface DocxReactViewProps {
 	i18n: Translations | undefined;
 	showRuler: boolean;
 	autosave: boolean;
+	reserveReviewSidebar: boolean;
 	onDirtyChange: (isDirty: boolean) => void;
 	onSave: (buffer: ArrayBuffer) => Promise<void>;
 	onDocumentNameChange: (name: string) => Promise<void>;
@@ -67,7 +68,7 @@ export interface DocxReactViewHandle {
 }
 
 export const DocxReactView = forwardRef<DocxReactViewHandle, DocxReactViewProps>(function DocxReactView(
-	{ file, buffer, error, isLoading, authorName, i18n, showRuler, autosave, onDirtyChange, onSave, onDocumentNameChange },
+	{ file, buffer, error, isLoading, authorName, i18n, showRuler, autosave, reserveReviewSidebar, onDirtyChange, onSave, onDocumentNameChange },
 	ref,
 ) {
 	const editorRef = useRef<DocxEditorRef>(null);
@@ -76,6 +77,19 @@ export const DocxReactView = forwardRef<DocxReactViewHandle, DocxReactViewProps>
 	const autosaveTimeoutRef = useRef<number | null>(null);
 	const renameTimeoutRef = useRef<number | null>(null);
 	const [documentName, setDocumentName] = useState(file?.name ?? '');
+	const pluginSidebarItems = useMemo<NonNullable<ComponentProps<typeof DocxEditor>['pluginSidebarItems']>>(() => {
+		if (!reserveReviewSidebar) {
+			return [];
+		}
+
+		return [{
+			id: 'docxidian-review-sidebar-reservation',
+			anchorPos: 1,
+			estimatedHeight: 1,
+			priority: Number.MAX_SAFE_INTEGER,
+			render: () => null,
+		}];
+	}, [reserveReviewSidebar]);
 
 	useEffect(() => {
 		ensureEditorStyles();
@@ -221,6 +235,7 @@ export const DocxReactView = forwardRef<DocxReactViewHandle, DocxReactViewProps>
 			showRuler={showRuler}
 			documentName={documentName}
 			documentNameEditable
+			pluginSidebarItems={pluginSidebarItems.length > 0 ? pluginSidebarItems : undefined}
 			onDocumentNameChange={(name) => {
 				setDocumentName(name);
 				scheduleRename(name);

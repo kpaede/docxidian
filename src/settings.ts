@@ -13,7 +13,7 @@ export const DEFAULT_SETTINGS: DocxidianSettings = {
 	authorName: 'Obsidian',
 	editorLanguage: DEFAULT_LANGUAGE,
 	showRuler: false,
-	autosave: false,
+	autosave: true,
 };
 
 export class DocxidianSettingTab extends PluginSettingTab {

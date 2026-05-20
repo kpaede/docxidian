@@ -3,6 +3,7 @@ import { createRef } from 'react';
 import { Root, createRoot } from 'react-dom/client';
 import type { Translations } from '@eigenpal/docx-editor-i18n';
 import { DocxReactView, DocxReactViewHandle } from './DocxReactView';
+import { hasReviewMarkup } from './docxReviewMarkup';
 
 export const VIEW_TYPE_DOCX = 'docxidian-docx-view';
 
@@ -82,6 +83,7 @@ export class DocxView extends FileView {
 	private error: string | null = null;
 	private isLoading = false;
 	private isDirty = false;
+	private reserveReviewSidebar = false;
 	private hostResizeObserver: ResizeObserver | null = null;
 	private titleObserver: MutationObserver | null = null;
 
@@ -138,6 +140,7 @@ export class DocxView extends FileView {
 		this.buffer = null;
 		this.error = null;
 		this.isDirty = false;
+		this.reserveReviewSidebar = false;
 	}
 
 	async onLoadFile(file: TFile) {
@@ -146,10 +149,12 @@ export class DocxView extends FileView {
 		this.error = null;
 		this.buffer = null;
 		this.isDirty = false;
+		this.reserveReviewSidebar = false;
 		this.render();
 
 		try {
 			this.buffer = await this.app.vault.readBinary(file);
+			this.reserveReviewSidebar = await hasReviewMarkup(this.buffer);
 		} catch (readError) {
 			const message = readError instanceof Error ? readError.message : 'Unknown read error';
 			this.error = `Could not load ${file.name}: ${message}`;
@@ -165,6 +170,7 @@ export class DocxView extends FileView {
 		this.buffer = null;
 		this.error = null;
 		this.isDirty = false;
+		this.reserveReviewSidebar = false;
 		this.render();
 	}
 
@@ -203,9 +209,7 @@ export class DocxView extends FileView {
 		}
 
 		await this.app.vault.modifyBinary(file, buffer);
-		this.buffer = buffer.slice(0);
 		this.isDirty = false;
-		this.render();
 	}
 
 	private async renameFile(name: string) {
@@ -399,6 +403,7 @@ export class DocxView extends FileView {
 				i18n={this.getEditorLocale()}
 				showRuler={this.getShowRuler()}
 				autosave={this.getAutosave()}
+				reserveReviewSidebar={this.reserveReviewSidebar}
 				onDirtyChange={(isDirty) => {
 					this.isDirty = isDirty;
 				}}

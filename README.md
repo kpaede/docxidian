@@ -13,7 +13,7 @@ This plugin is not yet part of the Obsidian community plugins. You can  install 
 
 ## Usage
 
-Enable the plugin in **Settings -> Community plugins**, then open a `.docx` file from the vault. Obsidian will route it to Docxidian's custom file view.
+Enable the plugin in **Settings -> Community plugins**, then open a `.docx` file from the vault. Obsidian will route it to docxidian's custom file view.
 
 Use the editor toolbar's save action (upper left) or the command **Save current docx** to write changes back to the open file.
 
