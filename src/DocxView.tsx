@@ -86,6 +86,7 @@ export class DocxView extends FileView {
 	private reserveReviewSidebar = false;
 	private hostResizeObserver: ResizeObserver | null = null;
 	private titleObserver: MutationObserver | null = null;
+	private helpMenuObserver: MutationObserver | null = null;
 
 	constructor(
 		leaf: WorkspaceLeaf,
@@ -119,6 +120,7 @@ export class DocxView extends FileView {
 		this.prepareViewHost();
 		this.registerHostMetrics();
 		this.removeNativeButtonTitles();
+		this.removeEditorHelpMenu();
 		this.trackEditorHoverState();
 		this.registerEditorSaveInterceptor();
 		this.registerSaveShortcut();
@@ -135,6 +137,8 @@ export class DocxView extends FileView {
 		this.hostResizeObserver = null;
 		this.titleObserver?.disconnect();
 		this.titleObserver = null;
+		this.helpMenuObserver?.disconnect();
+		this.helpMenuObserver = null;
 		document.body.classList.remove('docxidian-editor-hovering');
 		this.hostEl = null;
 		this.reactViewRef = createRef<DocxReactViewHandle>();
@@ -341,6 +345,33 @@ export class DocxView extends FileView {
 		this.register(() => {
 			this.titleObserver?.disconnect();
 			this.titleObserver = null;
+		});
+	}
+
+	private removeEditorHelpMenu() {
+		if (!this.hostEl) {
+			return;
+		}
+
+		const removeHelpMenu = () => {
+			this.hostEl?.querySelectorAll('.ep-root [role="menubar"] > div').forEach((menuItem) => {
+				const button = menuItem.querySelector(':scope > button');
+				const label = button?.textContent?.replace(/\s+/g, ' ').trim().toLowerCase();
+				if (label === 'help' || label === 'hilfe') {
+					menuItem.remove();
+				}
+			});
+		};
+
+		removeHelpMenu();
+		this.helpMenuObserver = new MutationObserver(removeHelpMenu);
+		this.helpMenuObserver.observe(this.hostEl, {
+			childList: true,
+			subtree: true,
+		});
+		this.register(() => {
+			this.helpMenuObserver?.disconnect();
+			this.helpMenuObserver = null;
 		});
 	}
 
