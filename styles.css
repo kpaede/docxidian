@@ -20,6 +20,13 @@
 	width: 100%;
 }
 
+/* The hidden ProseMirror editor is portaled to body; without pre-wrap, trailing spaces collapse and get overwritten by the next keystroke. */
+.paged-editor__hidden-pm .ProseMirror {
+	font-variant-ligatures: none;
+	white-space: pre-wrap;
+	word-wrap: break-word;
+}
+
 .docxidian-host .ep-root,
 .docxidian-host .ep-root * {
 	box-sizing: border-box;
