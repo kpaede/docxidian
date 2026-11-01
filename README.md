@@ -11,7 +11,7 @@ The plugin is based on [DOCX EDITOR](https://github.com/eigenpal/docx-editor), a
 
 This plugin is part of the Obsidian community plugins. You can also install it via BRAT (add this repository's URL as a beta plugin). To install manually, copy `main.js`, `manifest.json`, and `styles.css` from the same release into your vault's plugin folder.
 
-Version 0.0.4-beta.2 and later requires Obsidian 1.13.0 or later.
+Requires Obsidian 1.13.0 or later.
 
 ## Usage
 

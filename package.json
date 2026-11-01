@@ -1,6 +1,6 @@
 {
 	"name": "docxidian",
-	"version": "0.0.4-beta.2",
+	"version": "0.0.4",
 	"description": "Open, edit, and save DOCX documents directly inside Obsidian.",
 	"main": "main.js",
 	"type": "module",
