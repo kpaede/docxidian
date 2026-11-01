@@ -9,7 +9,9 @@ The plugin is based on [DOCX EDITOR](https://github.com/eigenpal/docx-editor), a
 
 ## Installation
 
-This plugin is not yet part of the Obsidian community plugins. You can install it via BRAT (add this repository's URL as a beta plugin). To install manually, copy `main.js`, `manifest.json`, and `styles.css` from the same release into your vault's plugin folder.
+This plugin is part of the Obsidian community plugins. You can also install it via BRAT (add this repository's URL as a beta plugin). To install manually, copy `main.js`, `manifest.json`, and `styles.css` from the same release into your vault's plugin folder.
+
+Version 0.0.4-beta.2 and later requires Obsidian 1.13.0 or later.
 
 ## Usage
 
@@ -28,6 +30,7 @@ The automated vault integration suite requires a running Obsidian desktop app wi
 ```sh
 OBSIDIAN_TEST_VAULT="Test vault" npm run test:vault
 OBSIDIAN_TEST_VAULT="Test vault" npm run test:rulers
+OBSIDIAN_TEST_VAULT="Test vault" npm run test:settings
 ```
 
 Set `OBSIDIAN_CLI` if the CLI is installed outside the default macOS app path. The suite creates a new folder containing its own DOCX and Markdown fixtures, restores the editor settings it changes in memory, and leaves the fixtures for inspection. It does not edit existing documents. Set `OBSIDIAN_TEST_REPORT` to write a JSON test report.

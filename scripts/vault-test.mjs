@@ -60,6 +60,13 @@ try {
 	await check('DOCX opens with text, header and table', () => {
 		const text = evaluate('JSON.stringify(window.__docxSuite.leaf.view.hostEl.innerText)');
 		for (const expected of ['BetaStart', 'Beta header', 'Cell A', 'Cell B']) assert(text.includes(expected), expected);
+		assert.equal(evaluate('(()=>{const r=window.__docxSuite.leaf.view.hostEl.getBoundingClientRect();return r.height>200&&r.width>200})()'), true, 'Editor host collapsed');
+	});
+	await check('Editor mode menu retains its normalized layout', async () => {
+		assert.equal(evaluate('(()=>{const b=[...window.__docxSuite.leaf.view.hostEl.querySelectorAll("button")].find(b=>b.textContent.trim()==="Editing");if(!b)return false;b.click();return true})()'), true);
+		await waitFor('document.querySelectorAll("[data-docxidian-mode-menu-item]").length===3', 'Mode menu did not normalize');
+		assert.deepEqual(evaluate('JSON.stringify([...document.querySelectorAll("[data-docxidian-mode-menu-item]")].map(b=>getComputedStyle(b).display))'), ['grid', 'grid', 'grid']);
+		evaluate('document.querySelector("[data-docxidian-mode-menu-item=editing]").click()');
 	});
 	await check('Portal uses pre-wrap and actual keystrokes preserve spaces', () => {
 		assert.equal(evaluate('getComputedStyle(window.__docxSuite.pm()).whiteSpace'), 'pre-wrap');

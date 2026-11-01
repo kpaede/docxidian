@@ -305,7 +305,7 @@ export function renderDocxEmbeds(
 	const embeds = collectEmbedElements(el);
 
 	for (const embedEl of embeds) {
-		if (!(embedEl instanceof HTMLElement) || embedEl.dataset.docxidianEmbed === 'true') {
+		if (!(embedEl.instanceOf(HTMLElement)) || embedEl.dataset.docxidianEmbed === 'true') {
 			continue;
 		}
 

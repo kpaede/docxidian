@@ -1,5 +1,5 @@
-import { App, PluginSettingTab, Setting } from 'obsidian';
-import DocxidianPlugin from './main';
+import { App, PluginSettingTab, type SettingDefinitionControl } from 'obsidian';
+import type DocxidianPlugin from './main';
 import { DOCXIDIAN_LANGUAGE_OPTIONS, DEFAULT_LANGUAGE, normalizeDocxidianLanguage, type DocxidianLanguage } from './locales';
 
 export interface DocxidianSettings {
@@ -17,66 +17,67 @@ export const DEFAULT_SETTINGS: DocxidianSettings = {
 };
 
 export class DocxidianSettingTab extends PluginSettingTab {
-	plugin: DocxidianPlugin;
-
-	constructor(app: App, plugin: DocxidianPlugin) {
+	constructor(app: App, public plugin: DocxidianPlugin) {
 		super(app, plugin);
-		this.plugin = plugin;
 	}
 
-	display(): void {
-		const { containerEl } = this;
-
-		containerEl.empty();
-
-		new Setting(containerEl)
-			.setName('Author name')
-			.setDesc('Used for comments and tracked changes.')
-			.addText(text => text
-				.setPlaceholder('Obsidian')
-				.setValue(this.plugin.settings.authorName)
-				.onChange(async (value) => {
-					this.plugin.settings.authorName = value.trim() || DEFAULT_SETTINGS.authorName;
-					await this.plugin.saveSettings();
-				}));
-
-		new Setting(containerEl)
-			.setName('Editor language')
-			.setDesc('Select the language used by the editor toolbar, dialogs, and messages.')
-			.addDropdown(dropdown => {
-				for (const option of DOCXIDIAN_LANGUAGE_OPTIONS) {
-					dropdown.addOption(option.code, option.label);
-				}
-
-				dropdown
-					.setValue(this.plugin.settings.editorLanguage)
-					.onChange(async (value) => {
-						this.plugin.settings.editorLanguage = normalizeDocxidianLanguage(value);
-						await this.plugin.saveSettings();
-						this.plugin.refreshDocxViews();
-					});
-			});
-
-		new Setting(containerEl)
-			.setName('Show ruler')
-			.setDesc('Show the page ruler above the document body.')
-			.addToggle(toggle => toggle
-				.setValue(this.plugin.settings.showRuler)
-				.onChange(async (value) => {
-					this.plugin.settings.showRuler = value;
-					await this.plugin.saveSettings();
-					this.plugin.refreshDocxViews();
-				}));
-
-		new Setting(containerEl)
-			.setName('Autosave')
-			.setDesc('Automatically save the document shortly after changes.')
-			.addToggle(toggle => toggle
-				.setValue(this.plugin.settings.autosave)
-				.onChange(async (value) => {
-					this.plugin.settings.autosave = value;
-					await this.plugin.saveSettings();
-					this.plugin.refreshDocxViews();
-				}));
+	getSettingDefinitions(): SettingDefinitionControl<keyof DocxidianSettings>[] {
+		return [
+			{
+				name: 'Author name',
+				desc: 'Used for comments and tracked changes.',
+				control: { type: 'text', key: 'authorName', placeholder: 'Obsidian', defaultValue: DEFAULT_SETTINGS.authorName },
+			},
+			{
+				name: 'Editor language',
+				desc: 'Select the language used by the editor toolbar, dialogs, and messages.',
+				control: {
+					type: 'dropdown', key: 'editorLanguage', defaultValue: DEFAULT_SETTINGS.editorLanguage,
+					options: Object.fromEntries(DOCXIDIAN_LANGUAGE_OPTIONS.map(option => [option.code, option.label])),
+				},
+			},
+			{
+				name: 'Show ruler',
+				desc: 'Show the page ruler above the document body.',
+				control: { type: 'toggle', key: 'showRuler', defaultValue: DEFAULT_SETTINGS.showRuler },
+			},
+			{
+				name: 'Autosave',
+				desc: 'Automatically save the document shortly after changes.',
+				control: { type: 'toggle', key: 'autosave', defaultValue: DEFAULT_SETTINGS.autosave },
+			},
+		];
 	}
+
+	getControlValue(key: string): unknown {
+		switch (key) {
+			case 'authorName': return this.plugin.settings.authorName;
+			case 'editorLanguage': return this.plugin.settings.editorLanguage;
+			case 'showRuler': return this.plugin.settings.showRuler;
+			case 'autosave': return this.plugin.settings.autosave;
+			default: return undefined;
+		}
+	}
+
+	async setControlValue(key: string, value: unknown): Promise<void> {
+		switch (key) {
+			case 'authorName':
+				if (typeof value !== 'string') return;
+				this.plugin.settings.authorName = value.trim() || DEFAULT_SETTINGS.authorName;
+				break;
+			case 'editorLanguage':
+				if (typeof value !== 'string') return;
+				this.plugin.settings.editorLanguage = normalizeDocxidianLanguage(value);
+				break;
+			case 'showRuler':
+			case 'autosave':
+				if (typeof value !== 'boolean') return;
+				this.plugin.settings[key] = value;
+				break;
+			default: return;
+		}
+		await this.plugin.saveSettings();
+		if (key !== 'authorName') this.plugin.refreshDocxViews();
+	}
+
 }

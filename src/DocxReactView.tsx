@@ -543,7 +543,11 @@ export const DocxReactView = forwardRef<DocxReactViewHandle, DocxReactViewProps>
 		key: findHighlightPluginKey,
 		state: {
 			init: () => ({ matches: [], currentIndex: 0 }),
-			apply: (transaction, previous) => transaction.getMeta(findHighlightPluginKey) ?? previous,
+			apply: (transaction, previous) => {
+				// Only publishFindHighlights writes this plugin's typed metadata.
+				const nextState = transaction.getMeta(findHighlightPluginKey) as FindHighlightState | undefined;
+				return nextState ?? previous;
+			},
 		},
 		props: {
 			decorations: (state) => {
@@ -740,9 +744,11 @@ export const DocxReactView = forwardRef<DocxReactViewHandle, DocxReactViewProps>
 
 		modeMenus.forEach(({ menu, buttons }) => {
 			menu.dataset.docxidianModeMenu = 'true';
-			menu.style.minWidth = '260px';
-			menu.style.padding = '4px 0';
-			menu.style.overflow = 'hidden';
+			menu.setCssStyles({
+				minWidth: '260px',
+				padding: '4px 0',
+				overflow: 'hidden',
+			});
 
 			buttons.forEach((button) => {
 				const mode = getEditorModeFromButton(button);
@@ -750,43 +756,51 @@ export const DocxReactView = forwardRef<DocxReactViewHandle, DocxReactViewProps>
 					button.dataset.docxidianModeMenuItem = mode;
 				}
 
-				button.style.alignItems = 'center';
-				button.style.boxShadow = 'none';
-				button.style.columnGap = '10px';
-				button.style.display = 'grid';
-				button.style.gridTemplateColumns = '24px minmax(0, 1fr) 20px';
-				button.style.justifyContent = 'start';
-				button.style.justifyItems = 'start';
-				button.style.lineHeight = 'normal';
-				button.style.minHeight = '48px';
-				button.style.padding = '8px 12px';
-				button.style.width = '100%';
+				button.setCssStyles({
+					alignItems: 'center',
+					boxShadow: 'none',
+					columnGap: '10px',
+					display: 'grid',
+					gridTemplateColumns: '24px minmax(0, 1fr) 20px',
+					justifyContent: 'start',
+					justifyItems: 'start',
+					lineHeight: 'normal',
+					minHeight: '48px',
+					padding: '8px 12px',
+					width: '100%',
+				});
 
 				const icon = button.querySelector<HTMLElement>(':scope > svg:first-child');
 				if (icon) {
-					icon.style.display = 'inline-flex';
-					icon.style.flex = '0 0 20px';
-					icon.style.gridColumn = '1';
-					icon.style.height = '20px';
-					icon.style.justifySelf = 'start';
-					icon.style.marginLeft = '0';
-					icon.style.width = '20px';
+					icon.setCssStyles({
+						display: 'inline-flex',
+						flex: '0 0 20px',
+						gridColumn: '1',
+						height: '20px',
+						justifySelf: 'start',
+						marginLeft: '0',
+						width: '20px',
+					});
 				}
 
 				const labelColumn = button.querySelector<HTMLElement>(':scope > span');
 				if (labelColumn) {
-					labelColumn.style.flex = '1 1 auto';
-					labelColumn.style.gridColumn = '2';
-					labelColumn.style.justifySelf = 'stretch';
-					labelColumn.style.marginLeft = '0';
-					labelColumn.style.minWidth = '0';
+					labelColumn.setCssStyles({
+						flex: '1 1 auto',
+						gridColumn: '2',
+						justifySelf: 'stretch',
+						marginLeft: '0',
+						minWidth: '0',
+					});
 				}
 
 				const checkIcon = button.querySelector<HTMLElement>(':scope > svg:last-child:not(:first-child)');
 				if (checkIcon) {
-					checkIcon.style.gridColumn = '3';
-					checkIcon.style.justifySelf = 'end';
-					checkIcon.style.marginLeft = '0';
+					checkIcon.setCssStyles({
+						gridColumn: '3',
+						justifySelf: 'end',
+						marginLeft: '0',
+					});
 				}
 			});
 		});
@@ -861,8 +875,12 @@ export const DocxReactView = forwardRef<DocxReactViewHandle, DocxReactViewProps>
 		const hostRoot = editorRoot.closest<HTMLElement>('.docxidian-host') ?? editorRoot;
 		const previousTouchAction = editorRoot.style.touchAction;
 		const previousHostTouchAction = hostRoot.style.touchAction;
-		editorRoot.style.touchAction = 'pan-x pan-y';
-		hostRoot.style.touchAction = 'pan-x pan-y';
+		editorRoot.setCssStyles({
+			touchAction: 'pan-x pan-y',
+		});
+		hostRoot.setCssStyles({
+			touchAction: 'pan-x pan-y',
+		});
 
 		const isEditorTarget = (target: EventTarget | null) => target instanceof Node && hostRoot.contains(target);
 
@@ -1106,8 +1124,12 @@ export const DocxReactView = forwardRef<DocxReactViewHandle, DocxReactViewProps>
 		document.addEventListener('pointercancel', handlePointerEnd, { passive: true, capture: true });
 
 		return () => {
-			editorRoot.style.touchAction = previousTouchAction;
-			hostRoot.style.touchAction = previousHostTouchAction;
+			editorRoot.setCssStyles({
+				touchAction: previousTouchAction,
+			});
+			hostRoot.setCssStyles({
+				touchAction: previousHostTouchAction,
+			});
 			document.removeEventListener('touchstart', handleTouchStart, true);
 			document.removeEventListener('touchmove', handleTouchMove, true);
 			document.removeEventListener('touchend', handleTouchEnd, true);
@@ -1155,7 +1177,7 @@ export const DocxReactView = forwardRef<DocxReactViewHandle, DocxReactViewProps>
 			new Notice(`Could not save ${file.name}: ${message}`);
 			return false;
 		} finally {
-			setTimeout(() => {
+			window.setTimeout(() => {
 				isSavingRef.current = false;
 			}, 300);
 		}
@@ -1209,8 +1231,7 @@ export const DocxReactView = forwardRef<DocxReactViewHandle, DocxReactViewProps>
 
 	const scheduleRename = useCallback((name: string) => {
 		clearRenameTimeout();
-		renameTimeoutRef.current = window.setTimeout(async () => {
-			renameTimeoutRef.current = null;
+		const renameDocument = async () => {
 			try {
 				await onDocumentNameChange(name);
 			} catch (renameError) {
@@ -1218,6 +1239,10 @@ export const DocxReactView = forwardRef<DocxReactViewHandle, DocxReactViewProps>
 				new Notice(`Could not rename ${file?.name ?? 'document'}: ${message}`);
 				setDocumentName(file?.name ?? '');
 			}
+		};
+		renameTimeoutRef.current = window.setTimeout(() => {
+			renameTimeoutRef.current = null;
+			void renameDocument();
 		}, 700);
 	}, [clearRenameTimeout, file, onDocumentNameChange]);
 
