@@ -3,6 +3,7 @@ import { DEFAULT_SETTINGS, DocxidianSettings, DocxidianSettingTab } from './sett
 import { processDocxEmbeds, registerDocxFileEmbed } from './DocxEmbed';
 import { DocxView, VIEW_TYPE_DOCX } from './DocxView';
 import { getDocxEditorLocale, normalizeDocxidianLanguage } from './locales';
+import { removeEditorStyles } from './editorStyles';
 
 const DOCX_EXTENSIONS = ['docx'];
 
@@ -10,6 +11,7 @@ export default class DocxidianPlugin extends Plugin {
 	settings: DocxidianSettings;
 
 	async onload() {
+		this.register(removeEditorStyles);
 		await this.loadSettings();
 
 		this.registerView(
@@ -24,10 +26,12 @@ export default class DocxidianPlugin extends Plugin {
 			),
 		);
 		this.registerExtensions(DOCX_EXTENSIONS, VIEW_TYPE_DOCX);
-		registerDocxFileEmbed(this, () => getDocxEditorLocale(this.settings.editorLanguage));
-		this.registerMarkdownPostProcessor((el, ctx) => {
-			processDocxEmbeds(this.app, el, ctx, () => getDocxEditorLocale(this.settings.editorLanguage));
-		}, 1000);
+		const nativeEmbeds = registerDocxFileEmbed(this, () => getDocxEditorLocale(this.settings.editorLanguage));
+		if (!nativeEmbeds) {
+			this.registerMarkdownPostProcessor((el, ctx) => {
+				processDocxEmbeds(this.app, el, ctx, () => getDocxEditorLocale(this.settings.editorLanguage));
+			}, 1000);
+		}
 
 		this.addCommand({
 			id: 'save-current-docx',

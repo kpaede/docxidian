@@ -1,6 +1,7 @@
 import esbuild from "esbuild";
 import process from "process";
 import { builtinModules } from 'node:module';
+import { editorRulerFixes } from './build/editor-patches.mjs';
 
 const banner =
 `/*
@@ -17,6 +18,7 @@ const context = await esbuild.context({
 	},
 	entryPoints: ["src/main.ts"],
 	bundle: true,
+	plugins: [editorRulerFixes],
 	external: [
 		"obsidian",
 		"electron",
