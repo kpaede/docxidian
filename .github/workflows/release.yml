@@ -28,6 +28,12 @@ jobs:
       - name: Build plugin
         run: npm run build
 
+      - name: Test plugin
+        run: npm test
+
+      - name: Lint plugin
+        run: npm run lint
+
       - name: Generate artifact attestation for main.js
         uses: actions/attest-build-provenance@v2
         with:
@@ -46,6 +52,9 @@ jobs:
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          make_latest: ${{ contains(github.ref_name, '-') && 'false' || 'true' }}
+          fail_on_unmatched_files: true
           files: |
             main.js
             styles.css

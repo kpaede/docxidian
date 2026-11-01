@@ -4,31 +4,13 @@ import { DocxEditor, type DocxEditorRef, type EditorMode } from '@eigenpal/docx-
 import type { Translations } from '@eigenpal/docx-editor-i18n';
 import { Plugin, PluginKey, TextSelection } from 'prosemirror-state';
 import { Decoration, DecorationSet } from 'prosemirror-view';
-import editorStyles from '@eigenpal/docx-editor-react/styles.css';
+import { ensureEditorStyles } from './editorStyles';
+import { useRulerDragGuard } from './useRulerDragGuard';
 import type { DocxidianLanguage } from './locales';
 
-let stylesInjected = false;
 let editorInstanceCounter = 0;
+let documentInstanceCounter = 0;
 
-interface DocxSectionProperties {
-	pageHeight?: number;
-	marginTop?: number;
-	marginBottom?: number;
-}
-
-interface DocxDocumentWithSectionProperties {
-	package?: {
-		document?: {
-			finalSectionProperties?: DocxSectionProperties;
-			sections?: Array<{
-				properties?: DocxSectionProperties;
-			}>;
-		};
-	};
-}
-
-const DEFAULT_PAGE_HEIGHT_TWIPS = 15840;
-const DEFAULT_MARGIN_TWIPS = 1440;
 const MIN_TOUCH_ZOOM = 0.25;
 const MAX_TOUCH_ZOOM = 4;
 const TOUCH_ZOOM_SENSITIVITY = 0.55;
@@ -325,17 +307,6 @@ function findMatchesInView(editor: DocxEditorRef | null, searchText: string, mat
 	return matches;
 }
 
-export function ensureEditorStyles() {
-	if (stylesInjected) {
-		return;
-	}
-
-	const styleSheet = new CSSStyleSheet();
-	styleSheet.replaceSync(editorStyles);
-	document.adoptedStyleSheets = [...document.adoptedStyleSheets, styleSheet];
-	stylesInjected = true;
-}
-
 const SaveButton = ({ onClick }: { onClick: () => void }) => {
 	const ref = useRef<HTMLButtonElement>(null);
 	useEffect(() => {
@@ -544,8 +515,10 @@ export const DocxReactView = forwardRef<DocxReactViewHandle, DocxReactViewProps>
 ) {
 	const editorRef = useRef<DocxEditorRef>(null);
 	const editorClassNameRef = useRef(`docxidian-editor-${++editorInstanceCounter}`);
-	const rulerSyncFrameRef = useRef<number | null>(null);
-	const rulerSyncTimeoutRef = useRef<number | null>(null);
+	useRulerDragGuard(editorClassNameRef);
+	// Only a newly loaded buffer starts a new editor session. Saving changes
+	// mtime, and renaming changes the path; neither may reload the old buffer.
+	const documentInstanceKey = useMemo(() => ++documentInstanceCounter, [buffer]);
 	const pinchZoomStateRef = useRef<PinchZoomState | null>(null);
 	const pinchZoomScrollFrameRef = useRef<number | null>(null);
 	const activeTouchPointersRef = useRef<Map<number, PointerPoint>>(new Map());
@@ -570,7 +543,11 @@ export const DocxReactView = forwardRef<DocxReactViewHandle, DocxReactViewProps>
 		key: findHighlightPluginKey,
 		state: {
 			init: () => ({ matches: [], currentIndex: 0 }),
-			apply: (transaction, previous) => transaction.getMeta(findHighlightPluginKey) ?? previous,
+			apply: (transaction, previous) => {
+				// Only publishFindHighlights writes this plugin's typed metadata.
+				const nextState = transaction.getMeta(findHighlightPluginKey) as FindHighlightState | undefined;
+				return nextState ?? previous;
+			},
 		},
 		props: {
 			decorations: (state) => {
@@ -767,9 +744,11 @@ export const DocxReactView = forwardRef<DocxReactViewHandle, DocxReactViewProps>
 
 		modeMenus.forEach(({ menu, buttons }) => {
 			menu.dataset.docxidianModeMenu = 'true';
-			menu.style.minWidth = '260px';
-			menu.style.padding = '4px 0';
-			menu.style.overflow = 'hidden';
+			menu.setCssStyles({
+				minWidth: '260px',
+				padding: '4px 0',
+				overflow: 'hidden',
+			});
 
 			buttons.forEach((button) => {
 				const mode = getEditorModeFromButton(button);
@@ -777,43 +756,51 @@ export const DocxReactView = forwardRef<DocxReactViewHandle, DocxReactViewProps>
 					button.dataset.docxidianModeMenuItem = mode;
 				}
 
-				button.style.alignItems = 'center';
-				button.style.boxShadow = 'none';
-				button.style.columnGap = '10px';
-				button.style.display = 'grid';
-				button.style.gridTemplateColumns = '24px minmax(0, 1fr) 20px';
-				button.style.justifyContent = 'start';
-				button.style.justifyItems = 'start';
-				button.style.lineHeight = 'normal';
-				button.style.minHeight = '48px';
-				button.style.padding = '8px 12px';
-				button.style.width = '100%';
+				button.setCssStyles({
+					alignItems: 'center',
+					boxShadow: 'none',
+					columnGap: '10px',
+					display: 'grid',
+					gridTemplateColumns: '24px minmax(0, 1fr) 20px',
+					justifyContent: 'start',
+					justifyItems: 'start',
+					lineHeight: 'normal',
+					minHeight: '48px',
+					padding: '8px 12px',
+					width: '100%',
+				});
 
 				const icon = button.querySelector<HTMLElement>(':scope > svg:first-child');
 				if (icon) {
-					icon.style.display = 'inline-flex';
-					icon.style.flex = '0 0 20px';
-					icon.style.gridColumn = '1';
-					icon.style.height = '20px';
-					icon.style.justifySelf = 'start';
-					icon.style.marginLeft = '0';
-					icon.style.width = '20px';
+					icon.setCssStyles({
+						display: 'inline-flex',
+						flex: '0 0 20px',
+						gridColumn: '1',
+						height: '20px',
+						justifySelf: 'start',
+						marginLeft: '0',
+						width: '20px',
+					});
 				}
 
 				const labelColumn = button.querySelector<HTMLElement>(':scope > span');
 				if (labelColumn) {
-					labelColumn.style.flex = '1 1 auto';
-					labelColumn.style.gridColumn = '2';
-					labelColumn.style.justifySelf = 'stretch';
-					labelColumn.style.marginLeft = '0';
-					labelColumn.style.minWidth = '0';
+					labelColumn.setCssStyles({
+						flex: '1 1 auto',
+						gridColumn: '2',
+						justifySelf: 'stretch',
+						marginLeft: '0',
+						minWidth: '0',
+					});
 				}
 
 				const checkIcon = button.querySelector<HTMLElement>(':scope > svg:last-child:not(:first-child)');
 				if (checkIcon) {
-					checkIcon.style.gridColumn = '3';
-					checkIcon.style.justifySelf = 'end';
-					checkIcon.style.marginLeft = '0';
+					checkIcon.setCssStyles({
+						gridColumn: '3',
+						justifySelf: 'end',
+						marginLeft: '0',
+					});
 				}
 			});
 		});
@@ -875,62 +862,6 @@ export const DocxReactView = forwardRef<DocxReactViewHandle, DocxReactViewProps>
 		}
 	}, []);
 
-	const syncVerticalRulerMarkers = useCallback((docxDocument: DocxDocumentWithSectionProperties | null | undefined) => {
-		if (!showRuler || !docxDocument) {
-			return;
-		}
-
-		const documentProperties = docxDocument.package?.document;
-		const sectionProperties = {
-			...documentProperties?.sections?.[0]?.properties,
-			...documentProperties?.finalSectionProperties,
-		};
-		const pageHeight = sectionProperties.pageHeight ?? DEFAULT_PAGE_HEIGHT_TWIPS;
-		const topMargin = sectionProperties.marginTop ?? DEFAULT_MARGIN_TWIPS;
-		const bottomMargin = sectionProperties.marginBottom ?? DEFAULT_MARGIN_TWIPS;
-		const ruler = document.querySelector<HTMLElement>(`.${editorClassNameRef.current} .docx-vertical-ruler`);
-
-		if (!ruler || pageHeight <= 0) {
-			return;
-		}
-
-		const pxPerTwip = ruler.getBoundingClientRect().height / pageHeight;
-		const topMarker = ruler.querySelector<HTMLElement>('.docx-ruler-marker-topMargin');
-		const bottomMarker = ruler.querySelector<HTMLElement>('.docx-ruler-marker-bottomMargin');
-
-		if (topMarker) {
-			topMarker.style.top = `${Math.round(topMargin * pxPerTwip - 5)}px`;
-		}
-		if (bottomMarker) {
-			bottomMarker.style.top = `${Math.round((pageHeight - bottomMargin) * pxPerTwip - 5)}px`;
-		}
-	}, [showRuler]);
-
-	const scheduleVerticalRulerMarkerSync = useCallback((document: DocxDocumentWithSectionProperties | null | undefined) => {
-		if (rulerSyncFrameRef.current !== null) {
-			window.cancelAnimationFrame(rulerSyncFrameRef.current);
-		}
-		if (rulerSyncTimeoutRef.current !== null) {
-			window.clearTimeout(rulerSyncTimeoutRef.current);
-		}
-
-		rulerSyncFrameRef.current = window.requestAnimationFrame(() => {
-			rulerSyncFrameRef.current = null;
-			syncVerticalRulerMarkers(document);
-			window.requestAnimationFrame(() => syncVerticalRulerMarkers(document));
-		});
-		rulerSyncTimeoutRef.current = window.setTimeout(() => {
-			rulerSyncTimeoutRef.current = null;
-			syncVerticalRulerMarkers(document);
-		}, 50);
-	}, [syncVerticalRulerMarkers]);
-
-	useEffect(() => {
-		if (showRuler) {
-			scheduleVerticalRulerMarkerSync(editorRef.current?.getDocument());
-		}
-	}, [showRuler, file, buffer, scheduleVerticalRulerMarkerSync]);
-
 	useEffect(() => {
 		if (!shouldEnableTouchPinchZoom()) {
 			return;
@@ -944,8 +875,12 @@ export const DocxReactView = forwardRef<DocxReactViewHandle, DocxReactViewProps>
 		const hostRoot = editorRoot.closest<HTMLElement>('.docxidian-host') ?? editorRoot;
 		const previousTouchAction = editorRoot.style.touchAction;
 		const previousHostTouchAction = hostRoot.style.touchAction;
-		editorRoot.style.touchAction = 'pan-x pan-y';
-		hostRoot.style.touchAction = 'pan-x pan-y';
+		editorRoot.setCssStyles({
+			touchAction: 'pan-x pan-y',
+		});
+		hostRoot.setCssStyles({
+			touchAction: 'pan-x pan-y',
+		});
 
 		const isEditorTarget = (target: EventTarget | null) => target instanceof Node && hostRoot.contains(target);
 
@@ -977,7 +912,6 @@ export const DocxReactView = forwardRef<DocxReactViewHandle, DocxReactViewProps>
 				pinchZoomScrollFrameRef.current = null;
 				scrollContainer.scrollLeft = Math.max(0, documentX * nextZoom - localX);
 				scrollContainer.scrollTop = Math.max(0, documentY * nextZoom - localY);
-				scheduleVerticalRulerMarkerSync(editorRef.current?.getDocument());
 			});
 			return true;
 		};
@@ -1190,8 +1124,12 @@ export const DocxReactView = forwardRef<DocxReactViewHandle, DocxReactViewProps>
 		document.addEventListener('pointercancel', handlePointerEnd, { passive: true, capture: true });
 
 		return () => {
-			editorRoot.style.touchAction = previousTouchAction;
-			hostRoot.style.touchAction = previousHostTouchAction;
+			editorRoot.setCssStyles({
+				touchAction: previousTouchAction,
+			});
+			hostRoot.setCssStyles({
+				touchAction: previousHostTouchAction,
+			});
 			document.removeEventListener('touchstart', handleTouchStart, true);
 			document.removeEventListener('touchmove', handleTouchMove, true);
 			document.removeEventListener('touchend', handleTouchEnd, true);
@@ -1210,19 +1148,11 @@ export const DocxReactView = forwardRef<DocxReactViewHandle, DocxReactViewProps>
 				pinchZoomScrollFrameRef.current = null;
 			}
 		};
-	}, [buffer, filePath, isLoading, scheduleVerticalRulerMarkerSync]);
+	}, [buffer, filePath, isLoading]);
 
 	useEffect(() => () => {
 		clearAutosaveTimeout();
 		clearRenameTimeout();
-		if (rulerSyncFrameRef.current !== null) {
-			window.cancelAnimationFrame(rulerSyncFrameRef.current);
-			rulerSyncFrameRef.current = null;
-		}
-		if (rulerSyncTimeoutRef.current !== null) {
-			window.clearTimeout(rulerSyncTimeoutRef.current);
-			rulerSyncTimeoutRef.current = null;
-		}
 	}, [clearAutosaveTimeout, clearRenameTimeout]);
 
 	const persistDocument = useCallback(async (output: ArrayBuffer, options?: { silent?: boolean }) => {
@@ -1247,7 +1177,7 @@ export const DocxReactView = forwardRef<DocxReactViewHandle, DocxReactViewProps>
 			new Notice(`Could not save ${file.name}: ${message}`);
 			return false;
 		} finally {
-			setTimeout(() => {
+			window.setTimeout(() => {
 				isSavingRef.current = false;
 			}, 300);
 		}
@@ -1301,8 +1231,7 @@ export const DocxReactView = forwardRef<DocxReactViewHandle, DocxReactViewProps>
 
 	const scheduleRename = useCallback((name: string) => {
 		clearRenameTimeout();
-		renameTimeoutRef.current = window.setTimeout(async () => {
-			renameTimeoutRef.current = null;
+		const renameDocument = async () => {
 			try {
 				await onDocumentNameChange(name);
 			} catch (renameError) {
@@ -1310,6 +1239,10 @@ export const DocxReactView = forwardRef<DocxReactViewHandle, DocxReactViewProps>
 				new Notice(`Could not rename ${file?.name ?? 'document'}: ${message}`);
 				setDocumentName(file?.name ?? '');
 			}
+		};
+		renameTimeoutRef.current = window.setTimeout(() => {
+			renameTimeoutRef.current = null;
+			void renameDocument();
 		}, 700);
 	}, [clearRenameTimeout, file, onDocumentNameChange]);
 
@@ -1334,7 +1267,7 @@ export const DocxReactView = forwardRef<DocxReactViewHandle, DocxReactViewProps>
 	return (
 		<>
 			<DocxEditor
-				key={`${file.path}-${file.stat.mtime}`}
+				key={documentInstanceKey}
 				ref={editorRef}
 				documentBuffer={buffer}
 				mode={editorMode}
@@ -1343,6 +1276,7 @@ export const DocxReactView = forwardRef<DocxReactViewHandle, DocxReactViewProps>
 				i18n={i18n}
 				className={editorClassNameRef.current}
 				showRuler={showRuler}
+				showFileOpen={false}
 				disableFindReplaceShortcuts
 				externalPlugins={externalPlugins}
 				documentName={documentName}
@@ -1366,7 +1300,6 @@ export const DocxReactView = forwardRef<DocxReactViewHandle, DocxReactViewProps>
 						onDirtyChange(true);
 						scheduleAutosave();
 					}
-					scheduleVerticalRulerMarkerSync(editorRef.current?.getDocument());
 				}}
 				onSave={(output) => {
 					const savePromise = persistDocument(output, pendingSaveOptionsRef.current);

@@ -63,7 +63,7 @@ function shouldHandleEditorSaveClick(target: EventTarget | null) {
 
 	let candidate: Element | null = target;
 	while (candidate && candidate !== document.body) {
-		if (candidate instanceof HTMLElement) {
+		if (candidate.instanceOf(HTMLElement)) {
 			const text = candidate.textContent?.replace(/\s+/g, ' ').trim().toLowerCase() ?? '';
 			if (/^save(?:\b|⌘|ctrl|\s)/.test(text) || /^speichern(?:\b|⌘|ctrl|\s)/.test(text)) {
 				return true;
@@ -119,7 +119,6 @@ export class DocxView extends FileView {
 	async onOpen() {
 		this.contentEl.empty();
 		this.hostEl = this.contentEl.createDiv({ cls: 'docxidian-host' });
-		this.prepareViewHost();
 		this.registerHostMetrics();
 		this.removeNativeButtonTitles();
 		this.removeEditorHelpMenu();
@@ -281,34 +280,6 @@ export class DocxView extends FileView {
 		}
 	}
 
-	private prepareViewHost() {
-		this.contentEl.setCssProps({
-			padding: '0',
-			overflow: 'hidden',
-			height: '100%',
-			display: 'flex',
-			'flex-direction': 'column',
-			'min-height': '0',
-		});
-
-		if (!this.hostEl) {
-			return;
-		}
-
-		this.hostEl.setCssProps({
-			'--docxidian-fixed-left-offset': '0px',
-			'--docxidian-fixed-top-offset': '0px',
-			background: '#f8fafc',
-			display: 'flex',
-			flex: '1 1 auto',
-			'flex-direction': 'column',
-			height: '100%',
-			'min-height': '0',
-			overflow: 'hidden',
-			width: '100%',
-		});
-	}
-
 	private registerHostMetrics() {
 		const updateHostMetrics = () => {
 			if (!this.hostEl) {
@@ -316,13 +287,6 @@ export class DocxView extends FileView {
 			}
 
 			const fixedProbe = this.hostEl.createDiv({ cls: 'docxidian-fixed-probe' });
-			fixedProbe.setCssProps({
-				left: '0',
-				'pointer-events': 'none',
-				position: 'fixed',
-				top: '0',
-				visibility: 'hidden',
-			});
 			const fixedRect = fixedProbe.getBoundingClientRect();
 			fixedProbe.remove();
 

@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef } from 'react';
 import { createRoot, Root } from 'react-dom/client';
 import { DocxEditor } from '@eigenpal/docx-editor-react';
 import type { Translations } from '@eigenpal/docx-editor-i18n';
-import { ensureEditorStyles } from './DocxReactView';
+import { ensureEditorStyles } from './editorStyles';
 
 const DOCX_EMBED_SELECTOR = '.internal-embed[src], .internal-embed[data-src]';
 
@@ -121,6 +121,7 @@ function DocxEmbedPreview({
 					showOutlineButton={false}
 					showRuler={false}
 					showToolbar={false}
+					showFileOpen={false}
 					showZoomControl={false}
 					onFontsLoaded={queueSyncPages}
 				/>
@@ -149,6 +150,7 @@ function getEmbedRegistry(app: App) {
 export class DocxFileEmbed extends Component {
 	private root: Root | null = null;
 	private unloaded = false;
+	private loadGeneration = 0;
 
 	constructor(
 		private info: EmbedInfo,
@@ -159,6 +161,7 @@ export class DocxFileEmbed extends Component {
 	) {
 		super();
 		this.info.containerEl.addClasses(['docxidian-embed', 'docxidian-native-embed']);
+		this.info.containerEl.dataset.docxidianEmbed = 'true';
 		this.registerDomEvent(this.info.containerEl, 'click', (evt) => {
 			evt.stopImmediatePropagation();
 		});
@@ -174,6 +177,7 @@ export class DocxFileEmbed extends Component {
 	}
 
 	private async loadDocument() {
+		const generation = ++this.loadGeneration;
 		const { containerEl } = this.info;
 		this.root?.unmount();
 		this.root = null;
@@ -184,7 +188,7 @@ export class DocxFileEmbed extends Component {
 		try {
 			ensureEditorStyles();
 			const buffer = await this.app.vault.readBinary(this.file);
-			if (this.unloaded) {
+			if (this.unloaded || generation !== this.loadGeneration) {
 				return;
 			}
 
@@ -193,7 +197,7 @@ export class DocxFileEmbed extends Component {
 			this.root = createRoot(hostEl);
 			this.root.render(<DocxEmbedPreview file={this.file} buffer={buffer} hostEl={hostEl} i18n={this.getEditorLocale()} />);
 		} catch (error) {
-			if (this.unloaded) {
+			if (this.unloaded || generation !== this.loadGeneration) {
 				return;
 			}
 
@@ -208,6 +212,7 @@ export class DocxFileEmbed extends Component {
 
 	onunload() {
 		this.unloaded = true;
+		this.loadGeneration++;
 		this.root?.unmount();
 		this.root = null;
 		super.onunload();
@@ -300,7 +305,7 @@ export function renderDocxEmbeds(
 	const embeds = collectEmbedElements(el);
 
 	for (const embedEl of embeds) {
-		if (!(embedEl instanceof HTMLElement) || embedEl.dataset.docxidianEmbed === 'true') {
+		if (!(embedEl.instanceOf(HTMLElement)) || embedEl.dataset.docxidianEmbed === 'true') {
 			continue;
 		}
 
